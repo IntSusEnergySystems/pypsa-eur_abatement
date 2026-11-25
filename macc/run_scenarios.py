@@ -31,6 +31,7 @@ from macc.common import (  # noqa: E402
     YEARS,
     config_path,
     dump_yaml,
+    load_yaml,
     scenario_name,
 )
 
@@ -40,10 +41,16 @@ def _run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def _selector(directory: Path, scenario: str) -> Path:
-    """Point snakemake at one scenario so the others are not built with it."""
+def _selector(directory: Path, year: int, scenario: str) -> Path:
+    """Point snakemake at one scenario so the others are not built with it.
+
+    Snakemake replaces a config section instead of merging inside it, so the
+    selector repeats the whole ``run`` block and changes only the name.
+    """
+    run = dict(load_yaml(config_path(year))["run"])
+    run["name"] = [scenario]
     path = directory / f"{scenario}.yaml"
-    dump_yaml(path, {"run": {"name": [scenario]}})
+    dump_yaml(path, {"run": run})
     return path
 
 
@@ -68,7 +75,7 @@ def solve_scenario(year: int, scenario: str, cores: str, directory: Path) -> Non
     print(f"\n=== {scenario}: solve and PyPSA post-processing ===", flush=True)
     _snakemake(
         cores,
-        [config_path(year), _selector(directory, scenario)],
+        [config_path(year), _selector(directory, year, scenario)],
         target=None,
     )
 
@@ -95,13 +102,28 @@ def solve_year(year: int, cores: str, directory: Path) -> None:
     _snakemake(cores, [config_path(year)], target="macc_postprocess")
 
 
+def _year_argument(value: str) -> int:
+    """Accept ``2025`` and the ``year=2025`` form pixi forwards."""
+    text = value.split("=", 1)[-1]
+    try:
+        year = int(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a planning year, got {value!r}"
+        ) from exc
+    if year not in YEARS:
+        raise argparse.ArgumentTypeError(
+            f"{year} is not one of {', '.join(str(item) for item in YEARS)}"
+        )
+    return year
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--year",
-        type=int,
+        type=_year_argument,
         action="append",
-        choices=YEARS,
         help="Planning year. Repeat to select several. Default: all six years.",
     )
     parser.add_argument(
