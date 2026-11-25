@@ -64,8 +64,11 @@ def _snakemake(cores: str, config_files: list[Path], target: str | None) -> None
         cores,
         "--rerun-incomplete",
     ]
-    for path in config_files:
-        cmd.extend(["--configfile", str(path)])
+    # One flag, several paths. A repeated --configfile replaces the previous
+    # list, so the year file was dropped and planning_horizons stayed at 2050.
+    if config_files:
+        cmd.append("--configfile")
+        cmd.extend(str(path) for path in config_files)
     if target:
         cmd.append(target)
     _run(cmd)

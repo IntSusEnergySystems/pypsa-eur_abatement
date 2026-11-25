@@ -114,7 +114,8 @@ data.costs.version,all,v0.16.0,fixed,Same value in every planning year and every
 snapshots.start,all,2013-01-01 00:00,fixed,Same value in every planning year and every CO2 case.
 snapshots.end,all,2013-12-31 23:00,fixed,Same value in every planning year and every CO2 case.
 atlite.default_cutout,all,europe-2013-sarah3-era5,fixed,Same value in every planning year and every CO2 case.
-clustering.cluster_network.n_clusters,all,50,fixed,Same value in every planning year and every CO2 case.
+clustering.mode,all,administrative,fixed,Same value in every planning year and every CO2 case.
+clustering.administrative.level,all,0,fixed,Same value in every planning year and every CO2 case.
 clustering.temporal.averaging,all,6h,fixed,Same value in every planning year and every CO2 case.
 energy.energy_totals_year,all,2023,fixed,Same value in every planning year and every CO2 case.
 biomass.year,all,2030,fixed,Same value in every planning year and every CO2 case.

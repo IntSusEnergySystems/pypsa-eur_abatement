@@ -21,9 +21,8 @@ One planning year:
 pixi run macc-year year=2030
 ```
 
-The solver thread count in the config is 32. If this machine has fewer cores,
-set `MACC_CORES` to a number at least that large before the pixi command, or
-lower `solving.solver_options.gurobi-default.threads`.
+Gurobi uses 8 threads. `MACC_CORES` must be at least 8, otherwise Snakemake
+will not start the solve.
 
 ## What pixi runs
 
@@ -144,7 +143,7 @@ Annual CO2 sequestration potential follows the year table in the config:
 | CO2 price | off, and the price is 0 |
 | Weather | 2013, cutout `europe-2013-sarah3-era5` |
 | Time step | 6h averaging of the hourly year |
-| Regions | 50 clusters, same country list as the default config |
+| Regions | one node per country (administrative level 0), without Kosovo (XK) |
 | Historical energy totals | Eurostat year 2023 |
 | Biomass potential | ENS_Med, biomass year 2030 |
 | Vehicle and ship efficiencies | the scalar values in `config/config.default.yaml` |

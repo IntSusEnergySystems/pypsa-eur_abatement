@@ -23,6 +23,7 @@ import os
 import re
 import sys
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 import linopy
@@ -1365,6 +1366,14 @@ def collect_kwargs(
 
     # Model creation kwargs
     model_kwargs = {}
+    # An empty solver_dir keeps linopy on the system temporary directory.
+    solver_dir = str(cf_solving.get("model_kwargs", {}).get("solver_dir") or "").strip()
+    if solver_dir:
+        Path(solver_dir).mkdir(parents=True, exist_ok=True)
+        os.environ["TMPDIR"] = solver_dir
+        os.environ["TMP"] = solver_dir
+        os.environ["TEMP"] = solver_dir
+        model_kwargs["solver_dir"] = solver_dir
     model_kwargs["multi_investment_periods"] = config["foresight"] == "perfect"
     model_kwargs["transmission_losses"] = cf_solving.get("transmission_losses", False)
     model_kwargs["linearized_unit_commitment"] = cf_solving.get(

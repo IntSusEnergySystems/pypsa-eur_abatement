@@ -37,7 +37,6 @@ from macc.common import (  # noqa: E402
     COST_YEAR,
     CUTOUT,
     MACC_DIR,
-    N_CLUSTERS,
     REMAINING,
     RESULTS_PREFIX,
     SCENARIO_DIR,
@@ -68,6 +67,40 @@ CONFIG_TEMPLATE = """\
 foresight: overnight
 planning_horizons:
 - {year}
+countries:
+- AL
+- AT
+- BA
+- BE
+- BG
+- CH
+- CZ
+- DE
+- DK
+- EE
+- ES
+- FI
+- FR
+- GB
+- GR
+- HR
+- HU
+- IE
+- IT
+- LT
+- LU
+- LV
+- ME
+- MK
+- NL
+- 'NO'
+- PL
+- PT
+- RO
+- RS
+- SE
+- SI
+- SK
 snapshots:
   start: "{weather_start}"
   end: "{weather_end}"
@@ -84,9 +117,12 @@ costs:
     co2: 0.0
 atlite:
   default_cutout: {cutout}
+# One electricity node per country. Do not set n_clusters to "all":
+# that skips administrative clustering.
 clustering:
-  cluster_network:
-    n_clusters: {n_clusters}
+  mode: administrative
+  administrative:
+    level: 0
   temporal:
     averaging: {temporal}
     segmentation: false
@@ -94,6 +130,12 @@ clustering:
 solving:
   options:
     noisy_costs: false
+    # LP files are large. /tmp is on the small root disk, so write them on /home.
+    model_kwargs:
+      solver_dir: resources/macc/solver-tmp
+  solver_options:
+    gurobi-default:
+      threads: 8
 macc:
   enable: true
 data:
@@ -142,7 +184,6 @@ def write_config(year: int) -> Path:
         weather_end=end,
         cost_year=COST_YEAR,
         cutout=CUTOUT,
-        n_clusters=N_CLUSTERS,
         temporal=TEMPORAL_RESOLUTION,
         technology_data_version=TECHNOLOGY_DATA_VERSION,
         prefix=RESULTS_PREFIX,

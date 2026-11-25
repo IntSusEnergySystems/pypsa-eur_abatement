@@ -2300,6 +2300,15 @@ def add_h2_gas_infrastructure(
         )
 
     if options["coal_cc"]:
+        # Coal is absent from conventional generation, and industrial coal
+        # demand can be zero, so nothing else creates the EU coal bus.
+        add_carrier_buses(
+            n=n,
+            carrier="coal",
+            costs=costs,
+            spatial=spatial,
+            options=options,
+        )
         efficiency_cc = costs.at["coal", "efficiency"] - capture_efficiency_loss(
             costs,
             costs.at["coal", "CO2 intensity"],

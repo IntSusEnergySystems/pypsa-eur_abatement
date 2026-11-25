@@ -11,6 +11,40 @@
 foresight: overnight
 planning_horizons:
 - 2050
+countries:
+- AL
+- AT
+- BA
+- BE
+- BG
+- CH
+- CZ
+- DE
+- DK
+- EE
+- ES
+- FI
+- FR
+- GB
+- GR
+- HR
+- HU
+- IE
+- IT
+- LT
+- LU
+- LV
+- ME
+- MK
+- NL
+- 'NO'
+- PL
+- PT
+- RO
+- RS
+- SE
+- SI
+- SK
 snapshots:
   start: "2013-01-01 00:00"
   end: "2013-12-31 23:00"
@@ -27,9 +61,12 @@ costs:
     co2: 0.0
 atlite:
   default_cutout: europe-2013-sarah3-era5
+# One electricity node per country. Do not set n_clusters to "all":
+# that skips administrative clustering.
 clustering:
-  cluster_network:
-    n_clusters: 50
+  mode: administrative
+  administrative:
+    level: 0
   temporal:
     averaging: 6h
     segmentation: false
@@ -37,6 +74,12 @@ clustering:
 solving:
   options:
     noisy_costs: false
+    # LP files are large. /tmp is on the small root disk, so write them on /home.
+    model_kwargs:
+      solver_dir: resources/macc/solver-tmp
+  solver_options:
+    gurobi-default:
+      threads: 8
 macc:
   enable: true
 data:
