@@ -1,0 +1,5 @@
+2050-REF:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null

@@ -1,0 +1,139 @@
+parameter,year,value,pathway,note
+sector.district_heating.progress,2025,0.1,evolves,
+sector.district_heating.progress,2030,0.25,evolves,
+sector.district_heating.progress,2035,0.4,evolves,
+sector.district_heating.progress,2040,0.55,evolves,
+sector.district_heating.progress,2045,0.75,evolves,
+sector.district_heating.progress,2050,1.0,evolves,
+sector.residential_heat.dsm.restriction_value,2025,0.16,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.residential_heat.dsm.restriction_value,2030,0.27,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.residential_heat.dsm.restriction_value,2035,0.36,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.residential_heat.dsm.restriction_value,2040,0.38,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.residential_heat.dsm.restriction_value,2045,0.39,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.residential_heat.dsm.restriction_value,2050,0.4,evolves,Not used while sector.residential_heat.dsm.enable is false.
+sector.land_transport_fuel_cell_share,2025,0.0,fixed,
+sector.land_transport_fuel_cell_share,2030,0.0,fixed,
+sector.land_transport_fuel_cell_share,2035,0.0,fixed,
+sector.land_transport_fuel_cell_share,2040,0.0,fixed,
+sector.land_transport_fuel_cell_share,2045,0.0,fixed,
+sector.land_transport_fuel_cell_share,2050,0.0,fixed,
+sector.land_transport_electric_share,2025,0.05,evolves,
+sector.land_transport_electric_share,2030,0.2,evolves,
+sector.land_transport_electric_share,2035,0.45,evolves,
+sector.land_transport_electric_share,2040,0.7,evolves,
+sector.land_transport_electric_share,2045,0.85,evolves,
+sector.land_transport_electric_share,2050,1.0,evolves,
+sector.land_transport_ice_share,2025,0.95,evolves,
+sector.land_transport_ice_share,2030,0.8,evolves,
+sector.land_transport_ice_share,2035,0.55,evolves,
+sector.land_transport_ice_share,2040,0.3,evolves,
+sector.land_transport_ice_share,2045,0.15,evolves,
+sector.land_transport_ice_share,2050,0.0,evolves,
+sector.shipping_hydrogen_share,2025,0.0,fixed,
+sector.shipping_hydrogen_share,2030,0.0,fixed,
+sector.shipping_hydrogen_share,2035,0.0,fixed,
+sector.shipping_hydrogen_share,2040,0.0,fixed,
+sector.shipping_hydrogen_share,2045,0.0,fixed,
+sector.shipping_hydrogen_share,2050,0.0,fixed,
+sector.shipping_methanol_share,2025,0.0,evolves,
+sector.shipping_methanol_share,2030,0.15,evolves,
+sector.shipping_methanol_share,2035,0.35,evolves,
+sector.shipping_methanol_share,2040,0.55,evolves,
+sector.shipping_methanol_share,2045,0.8,evolves,
+sector.shipping_methanol_share,2050,1.0,evolves,
+sector.shipping_oil_share,2025,1.0,evolves,
+sector.shipping_oil_share,2030,0.85,evolves,
+sector.shipping_oil_share,2035,0.65,evolves,
+sector.shipping_oil_share,2040,0.45,evolves,
+sector.shipping_oil_share,2045,0.2,evolves,
+sector.shipping_oil_share,2050,0.0,evolves,
+sector.shipping_lng_share,2025,0.0,fixed,
+sector.shipping_lng_share,2030,0.0,fixed,
+sector.shipping_lng_share,2035,0.0,fixed,
+sector.shipping_lng_share,2040,0.0,fixed,
+sector.shipping_lng_share,2045,0.0,fixed,
+sector.shipping_lng_share,2050,0.0,fixed,
+sector.reduce_space_heat_exogenously_factor,2025,0.09,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.reduce_space_heat_exogenously_factor,2030,0.09,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.reduce_space_heat_exogenously_factor,2035,0.11,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.reduce_space_heat_exogenously_factor,2040,0.16,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.reduce_space_heat_exogenously_factor,2045,0.21,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.reduce_space_heat_exogenously_factor,2050,0.29,evolves,Not used while sector.reduce_space_heat_exogenously is false. Building retrofit is optimised instead.
+sector.co2_sequestration_potential,2025,0.0,evolves,
+sector.co2_sequestration_potential,2030,40.0,evolves,
+sector.co2_sequestration_potential,2035,100.0,evolves,
+sector.co2_sequestration_potential,2040,180.0,evolves,
+sector.co2_sequestration_potential,2045,250.0,evolves,
+sector.co2_sequestration_potential,2050,250.0,evolves,
+industry.St_primary_fraction,2025,0.55,evolves,
+industry.St_primary_fraction,2030,0.5,evolves,
+industry.St_primary_fraction,2035,0.45,evolves,
+industry.St_primary_fraction,2040,0.4,evolves,
+industry.St_primary_fraction,2045,0.35,evolves,
+industry.St_primary_fraction,2050,0.3,evolves,
+industry.DRI_fraction,2025,0.0,evolves,
+industry.DRI_fraction,2030,0.05,evolves,
+industry.DRI_fraction,2035,0.2,evolves,
+industry.DRI_fraction,2040,0.4,evolves,
+industry.DRI_fraction,2045,0.7,evolves,
+industry.DRI_fraction,2050,1.0,evolves,
+industry.Al_primary_fraction,2025,0.375,evolves,
+industry.Al_primary_fraction,2030,0.35,evolves,
+industry.Al_primary_fraction,2035,0.325,evolves,
+industry.Al_primary_fraction,2040,0.3,evolves,
+industry.Al_primary_fraction,2045,0.25,evolves,
+industry.Al_primary_fraction,2050,0.2,evolves,
+industry.HVC_primary_fraction,2025,0.85,evolves,
+industry.HVC_primary_fraction,2030,0.78,evolves,
+industry.HVC_primary_fraction,2035,0.7,evolves,
+industry.HVC_primary_fraction,2040,0.6,evolves,
+industry.HVC_primary_fraction,2045,0.5,evolves,
+industry.HVC_primary_fraction,2050,0.4,evolves,
+industry.HVC_mechanical_recycling_fraction,2025,0.15,evolves,
+industry.HVC_mechanical_recycling_fraction,2030,0.18,evolves,
+industry.HVC_mechanical_recycling_fraction,2035,0.21,evolves,
+industry.HVC_mechanical_recycling_fraction,2040,0.24,evolves,
+industry.HVC_mechanical_recycling_fraction,2045,0.27,evolves,
+industry.HVC_mechanical_recycling_fraction,2050,0.3,evolves,
+industry.HVC_chemical_recycling_fraction,2025,0.0,evolves,
+industry.HVC_chemical_recycling_fraction,2030,0.04,evolves,
+industry.HVC_chemical_recycling_fraction,2035,0.08,evolves,
+industry.HVC_chemical_recycling_fraction,2040,0.12,evolves,
+industry.HVC_chemical_recycling_fraction,2045,0.16,evolves,
+industry.HVC_chemical_recycling_fraction,2050,0.2,evolves,
+industry.sector_ratios_fraction_future,2025,0.05,evolves,
+industry.sector_ratios_fraction_future,2030,0.2,evolves,
+industry.sector_ratios_fraction_future,2035,0.45,evolves,
+industry.sector_ratios_fraction_future,2040,0.7,evolves,
+industry.sector_ratios_fraction_future,2045,0.85,evolves,
+industry.sector_ratios_fraction_future,2050,1.0,evolves,
+costs.year,all,2025,fixed,Same value in every planning year and every CO2 case.
+costs.social_discountrate,all,0.02,fixed,Same value in every planning year and every CO2 case.
+costs.fill_values.discount rate,all,0.07,fixed,Same value in every planning year and every CO2 case.
+data.costs.version,all,v0.16.0,fixed,Same value in every planning year and every CO2 case.
+snapshots.start,all,2013-01-01 00:00,fixed,Same value in every planning year and every CO2 case.
+snapshots.end,all,2013-12-31 23:00,fixed,Same value in every planning year and every CO2 case.
+atlite.default_cutout,all,europe-2013-sarah3-era5,fixed,Same value in every planning year and every CO2 case.
+clustering.cluster_network.n_clusters,all,50,fixed,Same value in every planning year and every CO2 case.
+clustering.temporal.averaging,all,6h,fixed,Same value in every planning year and every CO2 case.
+energy.energy_totals_year,all,2023,fixed,Same value in every planning year and every CO2 case.
+biomass.year,all,2030,fixed,Same value in every planning year and every CO2 case.
+biomass.scenario,all,ENS_Med,fixed,Same value in every planning year and every CO2 case.
+sector.transport_electric_efficiency,all,53.19,fixed,Same value in every planning year and every CO2 case.
+sector.transport_fuel_cell_efficiency,all,30.003,fixed,Same value in every planning year and every CO2 case.
+sector.transport_ice_efficiency,all,16.0712,fixed,Same value in every planning year and every CO2 case.
+sector.shipping_methanol_efficiency,all,0.4,fixed,Same value in every planning year and every CO2 case.
+sector.shipping_oil_efficiency,all,0.4,fixed,Same value in every planning year and every CO2 case.
+sector.shipping_lng_efficiency,all,0.4,fixed,Same value in every planning year and every CO2 case.
+sector.agriculture_machinery_electric_share,all,0.5,fixed,Same value in every planning year and every CO2 case.
+sector.agriculture_machinery_oil_share,all,0.5,fixed,Same value in every planning year and every CO2 case.
+sector.agriculture_machinery_electric_efficiency,all,0.3,fixed,Same value in every planning year and every CO2 case.
+sector.agriculture_machinery_fuel_efficiency,all,0.7,fixed,Same value in every planning year and every CO2 case.
+sector.aviation_demand_factor,all,1.0,fixed,Same value in every planning year and every CO2 case.
+sector.reduce_space_heat_exogenously,all,False,fixed,Same value in every planning year and every CO2 case.
+sector.co2_sequestration_cost,all,30,fixed,Same value in every planning year and every CO2 case.
+industry.H2_DRI,all,1.7,fixed,Same value in every planning year and every CO2 case.
+industry.elec_DRI,all,0.322,fixed,Same value in every planning year and every CO2 case.
+electricity.powerplants_filter,all,(DateOut > 2025 or DateOut != DateOut) and (DateIn < 2026 or DateIn != DateIn),fixed,Same value in every planning year and every CO2 case.
+weather_year,all,2013,fixed,Same value in every planning year and every CO2 case.
+heating_technology_shares,all,endogenous,optimised,"Heat pumps, gas boilers, oil boilers, biomass boilers and resistive heaters are investment decisions. District-heating progress is the exogenous heating pathway. Building retrofit is optimised because reduce_space_heat_exogenously is false."

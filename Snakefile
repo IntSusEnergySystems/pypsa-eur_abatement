@@ -321,6 +321,11 @@ rule sync_dry:
         """
 
 
+if config.get("macc", {}).get("enable", False):
+
+    include: "rules/macc.smk"
+
+
 # use the one-line rule docstrings as job messages
 for r in workflow.rules:
     if r.message is None and r.docstring:

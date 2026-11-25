@@ -1,0 +1,54 @@
+# Overnight MACC for planning year 2050.
+# Sector and industry pathways are taken from config/config.default.yaml.
+# This file freezes costs, weather, spatial resolution and the 6h time step.
+#
+# Solve this year with pixi. The reference is solved first, its emissions
+# set the CO2 caps, and each capped scenario is then solved on its own.
+# PyPSA post-processing runs for every scenario. The MACC tables run after that.
+#   pixi run macc-year year=2050
+# All six years:
+#   pixi run macc
+foresight: overnight
+planning_horizons:
+- 2050
+snapshots:
+  start: "2013-01-01 00:00"
+  end: "2013-12-31 23:00"
+co2_budget:
+  emissions_scope: CO2
+  international_bunkers: false
+  relative: false
+  upper: null
+  lower: null
+costs:
+  year: 2025
+  emission_prices:
+    enable: false
+    co2: 0.0
+atlite:
+  default_cutout: europe-2013-sarah3-era5
+clustering:
+  cluster_network:
+    n_clusters: 50
+  temporal:
+    averaging: 6h
+    segmentation: false
+    representative: false
+solving:
+  options:
+    noisy_costs: false
+macc:
+  enable: true
+data:
+  costs:
+    source: archive
+    version: v0.16.0
+run:
+  prefix: macc
+  name: all
+  scenarios:
+    enable: true
+    file: macc/scenarios/2050.yaml
+  shared_resources:
+    policy: base
+  default_target_rule: all

@@ -44,12 +44,18 @@ update-dags = """
 	snakemake --dag dot --forceall --configfile config/test/config.myopic.yaml | sed -n '/^digraph/,$ p' | dot -Tsvg -o doc/img/dag_myopic.svg
 """
 
+macc = "python -m macc.run_scenarios"
+
 sync-locks = """
     pixi install -e default && \
     pixi workspace export conda-explicit-spec -e default envs && \
     bash -c 'for f in envs/*_conda_spec*; do mv "$f" "${f/_conda_spec/.pin}"; done' && \
     pixi workspace export conda-environment -e default envs/environment.yaml -n pypsa-eur
 """
+
+[tasks.macc-year]
+cmd = "python -m macc.run_scenarios --year {{ year }}"
+args = ["year"]
 
 [dependencies]
 atlite = ">=0.3,!=0.5.0"
