@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The five figures of the MACC study."""
+"""Study figures for the MACC runs."""
 
 from __future__ import annotations
 
@@ -194,74 +194,84 @@ def figure_shadow(curve: pd.DataFrame) -> None:
     plt.close(figure)
 
 
-def _heatmap(frame: pd.DataFrame, year: int, group: str, filename: str, title: str) -> None:
-    subset = frame.loc[(frame["year"] == year) & (frame["group"] == group)]
+def _eu_bars(axis, frame: pd.DataFrame, year: int, group: str, unit: str) -> None:
+    subset = frame.loc[
+        (frame["year"] == year) & (frame["group"] == group) & (frame["country"] == "EU")
+    ]
     if subset.empty:
+        axis.set_axis_off()
         return
-    pivot = subset.pivot(index="country", columns="item", values="model_over_reference")
-    pivot = pivot.apply(pd.to_numeric, errors="coerce")
-    figure, axis = plt.subplots(figsize=(1.15 * len(pivot.columns) + 2, 0.32 * len(pivot.index) + 1.6))
-    values = pivot.to_numpy(dtype=float)
-    finite = values[pd.notna(values)]
-    span = float(pd.Series(finite - 1.0).abs().max()) if len(finite) else 1.0
-    span = max(span, 0.05)
-    colours = plt.get_cmap("RdBu_r").copy()
-    colours.set_bad("#f0f0f0")
-    image = axis.imshow(
-        values, cmap=colours, vmin=1.0 - span, vmax=1.0 + span, aspect="auto"
+    positions = range(len(subset))
+    width = 0.38
+    axis.bar(
+        [position - width / 2 for position in positions],
+        subset["reference"].astype(float),
+        width=width,
+        label="EU reference",
+        color="#7a7a7a",
     )
-    axis.set_xticks(range(len(pivot.columns)))
-    axis.set_xticklabels(pivot.columns, rotation=45, ha="right")
-    axis.set_yticks(range(len(pivot.index)))
-    axis.set_yticklabels(pivot.index)
-    axis.set_title(title)
-    figure.colorbar(image, ax=axis, label="Model / reference")
-    figure.tight_layout()
-    figure.savefig(FIGURE_DIR / filename, dpi=150)
-    plt.close(figure)
+    axis.bar(
+        [position + width / 2 for position in positions],
+        subset["model"].astype(float),
+        width=width,
+        label="BAU",
+        color="#2f6fad",
+    )
+    axis.set_xticks(list(positions))
+    axis.set_xticklabels(subset["item"], rotation=40, ha="right")
+    axis.set_ylabel(unit)
+    axis.axhline(0.0, color="black", linewidth=0.4)
 
 
 def figure_reference(frame: pd.DataFrame) -> None:
-    """Solved BAU against the reference capacities and the imposed energy totals."""
+    """EU-level BAU capacity, generation and energy CO2 against the reference sheet."""
     if frame.empty:
         print("No solved BAU network, so figure 5 was not written.")
         return
     path = TABLE_DIR / "bau_vs_reference.csv"
     frame.to_csv(path, index=False)
     print(f"Wrote {path}")
+    panels = (
+        ("capacity", "GW", "Capacity"),
+        ("generation", "TWh", "Electricity generation"),
+        ("emissions", "Mt CO2", "Energy CO2"),
+    )
     for year in sorted(int(value) for value in frame["year"].unique()):
-        _heatmap(
-            frame,
-            year,
-            "capacity",
-            f"figure5_bau_capacity_{year}.png",
-            f"{year} BAU capacity, model / EU reference",
+        figure, axes = plt.subplots(3, 1, figsize=(11, 11))
+        for axis, (group, unit, title) in zip(axes, panels, strict=False):
+            _eu_bars(axis, frame, year, group, unit)
+            axis.set_title(title)
+        axes[0].legend(loc="upper right")
+        figure.suptitle(
+            f"{year} BAU and the EU reference sheet",
+            fontsize=12,
         )
-        _heatmap(
-            frame,
-            year,
-            "generation",
-            f"figure5_bau_generation_{year}.png",
-            f"{year} BAU electricity generation, model / EU reference",
+        figure.tight_layout(rect=(0, 0, 1, 0.96))
+        figure.savefig(FIGURE_DIR / f"figure5_bau_eu_{year}.png", dpi=150)
+        plt.close(figure)
+    figure_sectors(frame)
+
+
+def figure_sectors(frame: pd.DataFrame) -> None:
+    """EU-level BAU final energy by sector against the reference sheet."""
+    if frame.empty or "consumption" not in set(frame["group"]):
+        return
+    for year in sorted(int(value) for value in frame["year"].unique()):
+        figure, axis = plt.subplots(figsize=(8, 4.8))
+        _eu_bars(axis, frame, year, "consumption", "TWh")
+        axis.set_title("Final energy consumption")
+        axis.legend(loc="upper right")
+        figure.suptitle(
+            f"{year} BAU sectoral consumption and the EU reference sheet",
+            fontsize=12,
         )
-        _heatmap(
-            frame,
-            year,
-            "final_energy",
-            f"figure5_bau_final_energy_{year}.png",
-            f"{year} BAU final energy, model / EU reference",
-        )
-        _heatmap(
-            frame,
-            year,
-            "primary",
-            f"figure5_bau_primary_{year}.png",
-            f"{year} BAU primary supply, model / EU reference",
-        )
+        figure.tight_layout(rect=(0, 0, 1, 0.94))
+        figure.savefig(FIGURE_DIR / f"figure6_bau_sectors_{year}.png", dpi=150)
+        plt.close(figure)
 
 
 def write_figures() -> None:
-    """Write figures 1–5 from the extracted tables and the solved BAU networks."""
+    """Write figures 1–6 from the extracted tables and the solved BAU networks."""
     curve_path = RESULTS_DIR / "macc.csv"
     if not curve_path.exists():
         raise SystemExit("Run python -m macc.compute_macc before the study figures.")

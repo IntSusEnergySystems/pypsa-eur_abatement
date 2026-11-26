@@ -66,6 +66,8 @@ clustering:
 solving:
   options:
     noisy_costs: false
+    load_shedding:
+      enable: true
     # LP files are large. /tmp is on the small root disk, so write them on /home.
     model_kwargs:
       solver_dir: resources/macc/solver-tmp

@@ -43,6 +43,36 @@ PLANT_ROWS = {
     "Natural and manufactured gases": "gas",
     "Hydrogen and synthetic hydrocarbons": "hydrogen_power",
 }
+# These links are built with no existing capacity. They are the supply path
+# for the reference demand: low-voltage electricity, heat, and hydrogen for
+# industry. Locking them at zero makes that demand impossible. Pipelines,
+# batteries, thermal storage, DAC and the process-emissions vent stay frozen.
+DEMAND_LINKS_LEFT_EXTENDABLE = {
+    "electricity distribution grid",
+    "rural air heat pump",
+    "rural ground heat pump",
+    "rural biomass boiler",
+    "rural gas boiler",
+    "rural oil boiler",
+    "rural resistive heater",
+    "urban central air heat pump",
+    "urban central gas boiler",
+    "urban central resistive heater",
+    "urban decentral air heat pump",
+    "urban decentral biomass boiler",
+    "urban decentral gas boiler",
+    "urban decentral oil boiler",
+    "urban decentral resistive heater",
+    "SMR",
+    "H2 Electrolysis",
+    "shipping methanol",
+    "shipping hydrogen",
+    "shipping LNG",
+}
+# Unlimited fuel markets. PyPSA-Eur adds them as extendable generators with
+# no capital cost and the fuel price as the marginal cost. They are not
+# power plants, so the fleet freeze must not pin them at zero.
+PRIMARY_FUEL_GENERATORS = {"coal", "lignite", "oil primary", "uranium"}
 # component table, carrier, True when p_nom is already electric MW
 PLANT_COMPONENTS = {
     "nuclear": [("generators", "nuclear", True)],
@@ -227,6 +257,17 @@ def _freeze_extendable(table: pd.DataFrame, nominal: str, extendable: str) -> No
         mask &= np.isfinite(table[nominal].astype(float))
     if "carrier" in table.columns and nominal == "e_nom":
         mask &= ~table["carrier"].astype(str).eq("co2")
+    if "carrier" in table.columns and nominal == "p_nom":
+        # Heat vents are built with no capacity and a negative dispatch range
+        # so surplus heat can leave the bus. Freezing them at zero makes any
+        # surplus hour infeasible.
+        vents = table["carrier"].astype(str).str.endswith("heat vent")
+        mask &= ~vents
+        fuels = table["carrier"].isin(PRIMARY_FUEL_GENERATORS)
+        mask &= ~fuels
+        empty = table[nominal].astype(float).fillna(0.0).le(1e-6)
+        opened = table["carrier"].isin(DEMAND_LINKS_LEFT_EXTENDABLE) & empty
+        mask &= ~opened
     chosen = table.index[mask]
     if not len(chosen):
         return
@@ -237,6 +278,37 @@ def _freeze_extendable(table: pd.DataFrame, nominal: str, extendable: str) -> No
         table.loc[chosen, ceiling] = table.loc[chosen, nominal]
     if floor in table.columns:
         table.loc[chosen, floor] = table.loc[chosen, nominal]
+
+
+def _relax_forced_fuel(network) -> None:
+    """Keep biomass and biogas potentials as upper bounds.
+
+    PyPSA-Eur forces unsustainable biogas and bioliquids to be used in full,
+    and does the same for unsustainable solid biomass through a global
+    equality. Biogas upgrading is frozen at zero capacity, so that forced
+    production has nowhere to go.
+    """
+    minimum = network.generators["e_sum_min"].astype(float)
+    chosen = network.generators.index[minimum.gt(0) & minimum.lt(1e30)]
+    if len(chosen):
+        network.generators.loc[chosen, "e_sum_min"] = 0.0
+        LOGGER.info(
+            "BAU drops the minimum annual energy on %s fuel generators.",
+            len(chosen),
+        )
+    constraints = network.global_constraints
+    if constraints.empty or "sense" not in constraints.columns:
+        return
+    must = constraints.index[
+        constraints["type"].astype(str).eq("operational_limit")
+        & constraints["sense"].astype(str).eq("==")
+    ]
+    if len(must):
+        network.global_constraints.loc[must, "sense"] = "<="
+        LOGGER.info(
+            "BAU turns mandatory fuel limits into upper bounds: %s",
+            ", ".join(map(str, must)),
+        )
 
 
 def apply_bau_capacities(network, year: int) -> None:
@@ -265,6 +337,7 @@ def apply_bau_capacities(network, year: int) -> None:
             "BAU capacities with no matching component: %s",
             "; ".join(missing),
         )
+    _relax_forced_fuel(network)
     LOGGER.info("Applied EU Reference Scenario %s capacities to the BAU network.", year)
 
 

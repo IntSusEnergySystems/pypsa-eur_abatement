@@ -100,6 +100,8 @@ clustering:
 solving:
   options:
     noisy_costs: false
+    load_shedding:
+      enable: true
     # LP files are large. /tmp is on the small root disk, so write them on /home.
     model_kwargs:
       solver_dir: resources/macc/solver-tmp
@@ -125,8 +127,16 @@ run:
 """
 
 
+# Same value in every horizon. The schema requires a year map, not a scalar.
+BAU_HORIZONS = (2020, 2025, 2030, 2035, 2040, 2045, 2050)
+
+
+def _every_year(value: float) -> dict[int, float]:
+    return {year: value for year in BAU_HORIZONS}
+
+
 def scenario_entry(reduction: float, upper=None) -> dict:
-    return {
+    entry = {
         "co2_budget": {
             "relative": False,
             "upper": upper,
@@ -134,6 +144,18 @@ def scenario_entry(reduction: float, upper=None) -> dict:
         },
         "macc": {"bau": abs(reduction) < 1e-9},
     }
+    # BAU keeps today's industry and an oil-only maritime fuel. The mitigation
+    # runs keep the default year path for both. These settings must be year
+    # maps: the config schema rejects a single number.
+    if abs(reduction) < 1e-9:
+        entry["industry"] = {"sector_ratios_fraction_future": _every_year(0)}
+        entry["sector"] = {
+            "shipping_oil_share": _every_year(1),
+            "shipping_methanol_share": _every_year(0),
+            "shipping_hydrogen_share": _every_year(0),
+            "shipping_lng_share": _every_year(0),
+        }
+    return entry
 
 
 def scenario_file_has_caps(path: Path) -> bool:

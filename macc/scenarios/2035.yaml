@@ -5,6 +5,48 @@
     lower: null
   macc:
     bau: true
+  industry:
+    sector_ratios_fraction_future:
+      2020: 0
+      2025: 0
+      2030: 0
+      2035: 0
+      2040: 0
+      2045: 0
+      2050: 0
+  sector:
+    shipping_oil_share:
+      2020: 1
+      2025: 1
+      2030: 1
+      2035: 1
+      2040: 1
+      2045: 1
+      2050: 1
+    shipping_methanol_share:
+      2020: 0
+      2025: 0
+      2030: 0
+      2035: 0
+      2040: 0
+      2045: 0
+      2050: 0
+    shipping_hydrogen_share:
+      2020: 0
+      2025: 0
+      2030: 0
+      2035: 0
+      2040: 0
+      2045: 0
+      2050: 0
+    shipping_lng_share:
+      2020: 0
+      2025: 0
+      2030: 0
+      2035: 0
+      2040: 0
+      2045: 0
+      2050: 0
 2035-MACC_1:
   co2_budget:
     relative: false

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Apply EU Reference Scenario demand, generation and fuel supply to BAU.
+"""Apply EU Reference Scenario demand to BAU.
 
 GHG, GDP and import rows are not used. Population, the renovation rate,
 renewable shares and transport activity are kept in the table. They are
@@ -18,7 +18,6 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-from xarray import DataArray
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -30,7 +29,6 @@ LOGGER = logging.getLogger(__name__)
 
 BALANCE_CSV = MACC_DIR / "data" / "ref2020_country_balances.csv"
 KTOE_TO_MWH = 11_630.0
-GWH_TO_MWH = 1_000.0
 SHEET_TO_COUNTRY = {"EL": "GR"}
 
 INDUSTRY_LOADS = (
@@ -38,7 +36,6 @@ INDUSTRY_LOADS = (
     "gas for industry",
     "solid biomass for industry",
     "naphtha for industry",
-    "industry methanol",
     "H2 for industry",
     "industry electricity",
     "low-temperature heat for industry",
@@ -63,37 +60,6 @@ BUILDING_LOADS = (
 )
 ROAD_EV = ("land transport EV",)
 ROAD_OIL = ("land transport oil",)
-
-GENERATION = {
-    "gen_nuclear_gwh": [("generators", "nuclear", True)],
-    "gen_biomass_gwh": [
-        ("links", "urban central solid biomass CHP", False),
-        ("links", "urban central solid biomass CHP CC", False),
-    ],
-    "gen_hydro_lakes_gwh": [("storage_units", "hydro", True)],
-    "gen_ror_gwh": [("generators", "ror", True)],
-    "gen_onwind_gwh": [("generators", "onwind", True)],
-    "gen_offwind_gwh": [
-        ("generators", "offwind-ac", True),
-        ("generators", "offwind-dc", True),
-        ("generators", "offwind-float", True),
-    ],
-    "gen_solar_gwh": [
-        ("generators", "solar", True),
-        ("generators", "solar rooftop", True),
-        ("generators", "solar-hsat", True),
-    ],
-    "gen_geothermal_gwh": [("generators", "geothermal", True)],
-    "gen_coal_gwh": [("links", "coal", False), ("links", "coal CC", False)],
-    "gen_oil_gwh": [("links", "oil", False)],
-    "gen_gas_gwh": [
-        ("links", "CCGT", False),
-        ("links", "OCGT", False),
-        ("links", "urban central gas CHP", False),
-        ("links", "urban central gas CHP CC", False),
-    ],
-    "gen_hydrogen_gwh": [("links", "H2 turbine", False)],
-}
 
 # section, exact or prefix, variable, unit
 KEEP = (
@@ -330,6 +296,52 @@ def _split_road(network, country: str, electric_share: float | None) -> None:
     _scale(network, electric, total * share)
     _scale(network, oil, total * (1.0 - share))
     _cover_peak(network, country, electric, "BEV charger")
+    _cover_peak(network, country, oil, "land transport oil")
+
+
+def _clip_load_at_zero(network, names: pd.Index) -> None:
+    """Drop a negative load, which would inject energy onto its bus."""
+    if len(names) == 0:
+        return
+    listed = list(names)
+    network.loads.loc[listed, "p_set"] = network.loads.loc[listed, "p_set"].clip(lower=0.0)
+    timed = [name for name in listed if name in network.loads_t.p_set.columns]
+    if timed:
+        network.loads_t.p_set.loc[:, timed] = network.loads_t.p_set.loc[:, timed].clip(lower=0.0)
+
+
+def _open_process_vent(network, country: str) -> None:
+    """Let process CO2 reach the atmosphere. Capture stays at its frozen size."""
+    subset = network.links.loc[network.links.carrier.eq("process emissions")]
+    if subset.empty:
+        return
+    vents = subset.index[subset.bus0.map(network.buses.country).eq(country)]
+    if len(vents) == 0:
+        return
+    injected = 0.0
+    loads = _loads(network, country, ("process emissions",))
+    if len(loads):
+        profile = network.get_switchable_as_dense("Load", "p_set")[list(loads)].sum(axis=1)
+        injected += float((-profile).clip(lower=0.0).max())
+    naphtha_loads = _loads(network, country, ("naphtha for industry",))
+    naphtha_links = _matching(network, network.links, "naphtha for industry", country)
+    if len(naphtha_loads) and len(naphtha_links):
+        naphtha = network.get_switchable_as_dense("Load", "p_set")[list(naphtha_loads)].sum(axis=1)
+        factor = float(network.links.loc[naphtha_links[0], "efficiency2"])
+        if factor > 0:
+            injected += float((naphtha.clip(lower=0.0) * factor).max())
+    if injected <= 0:
+        return
+    current = float(network.links.loc[vents, "p_nom"].astype(float).sum())
+    if current >= injected:
+        return
+    network.links.loc[vents[0], "p_nom"] = injected
+    if "p_nom_max" in network.links.columns:
+        ceiling = float(network.links.loc[vents[0], "p_nom_max"])
+        if pd.isna(ceiling):
+            ceiling = 0.0
+        network.links.loc[vents[0], "p_nom_max"] = max(injected, ceiling)
+    network.links.loc[vents, "p_nom_extendable"] = False
 
 
 def _cover_peak(network, country: str, loads: pd.Index, link_carrier: str) -> None:
@@ -352,62 +364,58 @@ def _cover_peak(network, country: str, loads: pd.Index, link_carrier: str) -> No
         network.links.loc[links, "p_nom_extendable"] = False
 
 
-def _components(network, country: str | None, specs: list[tuple[str, str, bool]]):
-    found = []
-    for table_name, carrier, direct in specs:
-        table = getattr(network, table_name)
-        if country is None:
-            idx = table.index[table.carrier == carrier]
-        else:
-            idx = _matching(network, table, carrier, country)
-        if len(idx):
-            found.append((table_name, idx, direct))
-    return found
-
-
-def _remember(network, kind: str, item: dict) -> None:
-    items = getattr(network, kind, [])
-    items.append(item)
-    setattr(network, kind, items)
-
-
-def _queue_generation(network, country: str, variable: str, gwh: float | None) -> None:
-    if gwh is None:
+def _zero_loads(network, loads: pd.Index) -> None:
+    if len(loads) == 0:
         return
-    specs = GENERATION[variable]
-    pieces = _components(network, country, specs)
-    if not pieces:
-        if gwh > 1:
-            LOGGER.warning("%s has no component for %s (%.0f GWh)", country, variable, gwh)
-        return
-    _remember(
-        network,
-        "bau_generation_targets",
-        {
-            "name": f"{country}_{variable}",
-            "pieces": [(table, list(idx), direct) for table, idx, direct in pieces],
-            "target_mwh": gwh * GWH_TO_MWH,
-        },
-    )
+    listed = list(loads)
+    network.loads.loc[listed, "p_set"] = 0.0
+    timed = [name for name in listed if name in network.loads_t.p_set.columns]
+    if timed:
+        network.loads_t.p_set.loc[:, timed] = 0.0
 
 
-def _queue_supply(network, name: str, generators: pd.Index, limit_mwh: float) -> None:
-    if len(generators) == 0:
+def _disable_ammonia(network) -> None:
+    """Remove BAU ammonia demand. Haber-Bosch stays at its frozen capacity."""
+    loads = network.loads.index[network.loads.carrier.astype(str).eq("NH3")]
+    _zero_loads(network, loads)
+    LOGGER.info("BAU ammonia demand is turned off.")
+
+
+def _disable_methanol(network) -> None:
+    """Remove every BAU methanol load, including industry and shipping."""
+    carriers = network.loads.carrier.astype(str)
+    loads = network.loads.index[carriers.str.contains("methanol", case=False)]
+    _zero_loads(network, loads)
+    LOGGER.info("BAU methanol demand is turned off.")
+
+
+def _oil_only_shipping(network) -> None:
+    """Maritime fuel is oil in every BAU year. Drop methanol, hydrogen and LNG."""
+    carriers = ("shipping methanol", "shipping hydrogen", "shipping LNG")
+    loads = network.loads.index[network.loads.carrier.isin(carriers)]
+    if len(loads) == 0:
         return
-    _remember(
-        network,
-        "bau_supply_caps",
-        {"name": name, "generators": list(generators), "limit_mwh": max(limit_mwh, 0.0)},
-    )
+    listed = list(loads)
+    network.loads.loc[listed, "p_set"] = 0.0
+    timed = [name for name in listed if name in network.loads_t.p_set.columns]
+    if timed:
+        network.loads_t.p_set.loc[:, timed] = 0.0
+    LOGGER.info("BAU shipping demand is oil only.")
 
 
 def apply_bau_pathway(network, year: int) -> None:
-    """Scale BAU demand to the reference final energy and queue its energy limits."""
+    """Scale BAU demand to the reference final energy."""
+    _disable_ammonia(network)
+    _disable_methanol(network)
+    _oil_only_shipping(network)
     balances = load_balances(year)
     present = set(network.buses.country.dropna().unique())
     for country in COUNTRIES:
         if country not in present:
             continue
+        # A negative hydrogen load would force hydrogen onto the bus. The
+        # pipelines and turbines that could absorb it stay at their current size.
+        _clip_load_at_zero(network, _loads(network, country, ("H2 for industry",)))
         industry = _lookup(balances, country, "final_industry_ktoe")
         residential = _lookup(balances, country, "final_residential_ktoe")
         tertiary = _lookup(balances, country, "final_tertiary_ktoe")
@@ -445,106 +453,17 @@ def apply_bau_pathway(network, year: int) -> None:
         )
         _cover_peak(network, country, _loads(network, country, AVIATION_LOADS), "kerosene for aviation")
         _cover_peak(network, country, _loads(network, country, SHIPPING_LOADS), "shipping oil")
-        for variable in GENERATION:
-            _queue_generation(network, country, variable, _lookup(balances, country, variable))
-        gas = _lookup(balances, country, "primary_gas_ktoe")
-        biomass = _lookup(balances, country, "primary_biomass_ktoe")
-        if gas is not None:
-            _queue_supply(
-                network,
-                f"{country}_primary_gas",
-                _matching(network, network.generators, "gas", country),
-                gas * KTOE_TO_MWH,
-            )
-        if biomass is not None:
-            names = network.generators.index[
-                network.generators.carrier.isin(["solid biomass", "unsustainable solid biomass"])
-                & network.generators.bus.map(network.buses.country).eq(country)
-            ]
-            _queue_supply(network, f"{country}_primary_biomass", names, biomass * KTOE_TO_MWH)
+        for carrier in (
+            "coal for industry",
+            "gas for industry",
+            "solid biomass for industry",
+            "naphtha for industry",
+            "agriculture machinery oil",
+        ):
+            _cover_peak(network, country, _loads(network, country, (carrier,)), carrier)
+        _open_process_vent(network, country)
 
-    modelled = balances.loc[balances["country"].isin(present)]
-    for variable, carrier in (
-        ("primary_solid_ktoe", "coal"),
-        ("primary_oil_ktoe", "oil primary"),
-    ):
-        total = modelled.loc[modelled["variable"] == variable, "value"].sum()
-        generators = network.generators.index[network.generators.carrier == carrier]
-        _queue_supply(network, f"EU_{variable}", generators, total * KTOE_TO_MWH)
-    LOGGER.info("Applied EU Reference Scenario %s demand and energy limits.", year)
-
-
-def _weighted(variable, snapshots, weight: pd.Series):
-    data = DataArray(
-        weight.reindex(snapshots).to_numpy(),
-        coords={"snapshot": list(snapshots)},
-        dims=["snapshot"],
-    )
-    return (variable * data).sum()
-
-
-def _max_mwh(network, table_name: str, names: list[str], direct: bool) -> float:
-    weight = network.snapshot_weightings.objective
-    if table_name == "generators":
-        table = network.generators
-        profile = network.get_switchable_as_dense("Generator", "p_max_pu")
-    elif table_name == "storage_units":
-        table = network.storage_units
-        profile = network.get_switchable_as_dense("StorageUnit", "p_max_pu")
-    else:
-        table = network.links
-        profile = network.get_switchable_as_dense("Link", "p_max_pu")
-    profile = profile.reindex(columns=names).fillna(1.0)
-    power = table.loc[names, "p_nom"].astype(float)
-    if not direct:
-        power = power * table.loc[names, "efficiency"].astype(float).clip(lower=1e-6)
-    return float(profile.mul(power, axis=1).mul(weight, axis=0).sum().sum())
-
-
-def add_bau_energy_constraints(network, snapshots) -> None:
-    """Constrain BAU generation and primary fuel supply to the reference values."""
-    weight = network.snapshot_weightings.objective
-    for item in getattr(network, "bau_generation_targets", []):
-        expressions = []
-        available = 0.0
-        for table_name, names, direct in item["pieces"]:
-            available += _max_mwh(network, table_name, names, direct)
-            if table_name == "generators":
-                variable = network.model["Generator-p"].sel(name=names, snapshot=snapshots)
-                expressions.append(_weighted(variable, snapshots, weight))
-            elif table_name == "storage_units":
-                variable = network.model["StorageUnit-p"].sel(name=names, snapshot=snapshots)
-                expressions.append(_weighted(variable, snapshots, weight))
-            else:
-                variable = network.model["Link-p"].sel(name=names, snapshot=snapshots)
-                efficiency = DataArray(
-                    network.links.loc[names, "efficiency"].astype(float).clip(lower=1e-6).to_numpy(),
-                    coords={"name": names},
-                    dims=["name"],
-                )
-                expressions.append(_weighted(variable * efficiency, snapshots, weight))
-        target = item["target_mwh"]
-        if available > 0 and target > available:
-            LOGGER.warning(
-                "%s generation %.0f GWh is above the weather-limited maximum %.0f GWh",
-                item["name"],
-                target / GWH_TO_MWH,
-                available / GWH_TO_MWH,
-            )
-            target = available
-        lhs = expressions[0]
-        for expression in expressions[1:]:
-            lhs = lhs + expression
-        network.model.add_constraints(lhs, "==", target, name=f"BAU-gen-{item['name']}")
-
-    for item in getattr(network, "bau_supply_caps", []):
-        variable = network.model["Generator-p"].sel(
-            name=item["generators"], snapshot=snapshots
-        )
-        lhs = _weighted(variable, snapshots, weight)
-        network.model.add_constraints(
-            lhs, "<=", item["limit_mwh"], name=f"BAU-supply-{item['name']}"
-        )
+    LOGGER.info("Applied EU Reference Scenario %s demand.", year)
 
 
 def main() -> None:

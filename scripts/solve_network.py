@@ -1236,10 +1236,6 @@ def extra_functionality(
     ``snakemake.config`` are expected to be attached to the network.
     """
     config = n.config
-    if config.get("macc", {}).get("bau"):
-        from macc.bau_pathway import add_bau_energy_constraints
-
-        add_bau_energy_constraints(n, snapshots)
     constraints = config["solving"].get("constraints", {})
     if constraints["BAU"] and n.generators.p_nom_extendable.any():
         add_BAU_constraints(n, config)

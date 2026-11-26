@@ -157,15 +157,36 @@ if __name__ == "__main__":
             groupby=["bus", "carrier"],
         )
 
-    components = transmission_carriers.unique("component")
+    # Transmission carriers are removed from the pies because they are drawn as
+    # flows. A frozen or unused carrier has no energy balance, so those
+    # components are not in the index.
+    components = transmission_carriers.unique("component").intersection(
+        eb.index.unique("component")
+    )
     carriers = transmission_carriers.unique("carrier")
 
     # Only carriers that are also in the energy balance
     carriers_in_eb = carriers[carriers.isin(eb.index.get_level_values("carrier"))]
 
-    eb.loc[components] = eb.loc[components].drop(index=carriers_in_eb, level="carrier")
+    if len(components) and len(carriers_in_eb):
+        eb.loc[components] = eb.loc[components].drop(
+            index=carriers_in_eb, level="carrier"
+        )
     eb = eb.dropna()
     bus_size = eb.groupby(level=["bus", "carrier"]).sum()
+    if bus_size.empty:
+        import logging
+        import sys
+
+        logging.getLogger(__name__).warning(
+            "Carrier %s has no energy balance. Skipping interactive balance map.",
+            carrier,
+        )
+        with open(snakemake.output[0], "w") as f:
+            f.write(
+                f"<html><body><p>No {carrier} energy balance in this scenario</p></body></html>"
+            )
+        sys.exit(0)
 
     # line and links widths according to optimal capacity
     flow = n.statistics.transmission(groupby=False, bus_carrier=carrier)

@@ -25,11 +25,14 @@ time if a solve for that year is already going.
 v0.16.0 costs for that year, weather year 2013, a 6 h time step, and one
 node per country. The sector network is built once for that year and reused.
 BAU then changes the fleet and the demand in memory. The mitigation runs
-leave investment open and add a CO2 cap.
+leave investment open and add a CO2 cap. BAU industry uses today's specific
+energy consumption and fuel mix in every year
+(`sector_ratios_fraction_future` is 0 in every year). The mitigation runs keep the default
+path, from 0.05 in 2025 to 1 in 2050.
 
 1. Solve `{year}-BAU`. No extra CO2 cap. Power capacity is fixed to the EU
    Reference Scenario 2020, further investment is switched off, and the
-   country-sheet demand, generation and fuel limits below are applied.
+   country-sheet demand below is applied. Generation is not capped.
 2. Read the BAU `co2 atmosphere` store and write the absolute caps into
    `macc/scenarios/{year}.yaml`.
 3. Solve `{year}-MACC_1` through `{year}-MACC_6`. These keep the PyPSA-Eur
@@ -101,16 +104,20 @@ BAU uses them as follows.
   bunkers, so they are applied on their own loads.
 - Road electricity and oil are then split by the sheet's electricity share
   in road transport.
-- Electricity generation by source is an annual equality, in electric output.
-  If the 2013 weather cannot reach the sheet, the target is cut back to the
-  fleet and a warning is written.
-- Solid fuel and oil supply are capped at the sum of the modelled countries'
-  gross available energy. Gas and biomass are capped country by country.
-- International maritime energy is written onto the `shipping oil` load.
-  In 2025 the PyPSA shipping pathway is 100% oil, so that is the whole
-  maritime fuel. From 2030 the pathway also builds a methanol share (15% in
-  2030, then 35%, 55%, 80% and 100% in 2050). Hydrogen and LNG stay at zero.
-  That methanol load is not rescaled to the sheet.
+- Supply-side generation is limited by the reference capacities only. Annual
+  electricity output is not capped. Unsustainable biomass, biogas and
+  bioliquids stay available up to their potentials, but BAU does not force
+  those potentials to be used.   Coal and primary oil stay available at their
+  fuel price: those generators are the fuel market, not power plants.
+- Ammonia and methanol demand are turned off in BAU. Haber-Bosch and
+  methanolisation stay at their current capacity.
+- Load shedding is enabled in every scenario. A bus can leave demand unmet at
+  the default penalty of 100 000 EUR per unit, which is only used when no
+  feasible supply remains.
+- International maritime energy is written onto the `shipping oil` load in
+  every year. BAU has no methanol, hydrogen or LNG share of shipping. The
+  mitigation runs keep the default pathway: oil only in 2025, then 15%
+  methanol in 2030, 35% in 2035, 55% in 2040, 80% in 2045 and 100% in 2050.
 
 Population, the renovation rate, the renewable-energy shares and passenger
 and freight activity are stored in that table. They are already contained in
@@ -131,8 +138,9 @@ Countries without a sheet are not included.
 Weather year 2013, fuel prices, technology costs, efficiencies, administrative
 clustering and the 6 h time step. Costs use technology-data v0.16.0 at the
 planning year: 2025 costs for 2025, 2030 costs for 2030, and the same for the
-later years. BAU demand, generation and fuel supply follow the country
-sheets, and its fleet cannot grow. Mitigation runs keep the PyPSA-Eur demand
+later years. BAU demand follows the country sheets. Its supply-side fleet
+cannot grow, and that fleet's annual generation is not capped. Mitigation
+runs keep the PyPSA-Eur demand
 for that planning year, may invest, and add the CO2 cap.
 
 ## Figures
@@ -152,11 +160,18 @@ panels.
 - Figure 4, `figure4_shadow_vs_macc.png`: the same six MACC panels with the
   CO2 shadow price of `CO2Limit-upper` at the middle of each step. The stored
   dual is negative; the plotted price is its opposite, in EUR/t.
-- Figure 5, `figure5_bau_capacity_{year}.png`,
-  `figure5_bau_generation_{year}.png`, `figure5_bau_final_energy_{year}.png`
-  and `figure5_bau_primary_{year}.png`: each solved BAU divided by the EU
-  reference value, for the capacities and the energy totals imposed on that
-  run. The numbers are in `macc/postprocessing/tables/bau_vs_reference.csv`.
+- Figure 5, `figure5_bau_eu_{year}.png`: after each BAU solve, capacity,
+  electricity generation and energy CO2 against the `EU_B` sheet. Reference
+  emissions are domestic energy-related CO2 plus international bunker CO2.
+  Model emissions are the CO2 added to the atmosphere. The numbers are in
+  `macc/postprocessing/tables/bau_vs_reference.csv`.
+- Figure 6, `figure6_bau_sectors_{year}.png`: final energy consumption by
+  sector. Industry, transport, international aviation and international
+  maritime are the matching sheet rows. Residential and tertiary, including
+  agriculture, are one total, because BAU scales those loads together. The
+  reference is the `EU_A` sector block plus the bunker rows on `EU_B`. The
+  model is the energy the solved loads take, excluding load shedding. The
+  same rows are in `bau_vs_reference.csv`.
 
 Fixed operation is the technology-data FOM share of annualised capital.
 Fuel is the operating cost of the primary fuel generators. Variable
