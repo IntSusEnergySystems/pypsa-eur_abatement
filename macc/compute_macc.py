@@ -4,14 +4,14 @@
 
 """Build one marginal abatement cost curve for each planning year.
 
-Scenarios are ordered from the reference to the tightest cap. The marginal
-cost of step ``i`` is
+Scenarios are ordered from BAU to the tightest cap. The marginal cost of
+step ``i`` is
 
     MAC_{y,i} = (C_{y,i} - C_{y,i-1}) / (E_{y,i-1} - E_{y,i})
 
-in EUR per tonne. The average cost of a scenario is its extra system cost
-divided by its abatement relative to that year's reference. Carrier rows
-record how annual cost and capacity change on the same step.
+in EUR per tonne. A step that costs less than the one before it is negative.
+The average cost of a scenario is its extra system cost divided by its
+abatement relative to that year's BAU.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def _curve(summary: pd.DataFrame) -> pd.DataFrame:
     for year, group in summary.groupby("year", sort=True):
         ordered = group.sort_values("remaining_fraction", ascending=False)
         reference = ordered.iloc[0]
-        if reference["remaining_fraction"] != 1.0:
-            raise SystemExit(f"{year} is missing its REF scenario in the summary.")
+        if not str(reference["scenario"]).endswith("-BAU"):
+            raise SystemExit(f"{year} is missing its BAU scenario in the summary.")
         previous = None
         for _, current in ordered.iterrows():
             abatement = (

@@ -6,11 +6,12 @@
 
 For each planning year the order is:
 
-1. ``pixi run snakemake`` for ``{year}-REF``, including PyPSA post-processing.
-2. Read that reference and write the absolute CO2 caps.
-3. ``pixi run snakemake`` for ``{year}-CO2_90``, then ``CO2_80``, down to ``CO2_0``.
-4. ``pixi run snakemake macc_postprocess``, which waits for every PyPSA
-   post-processing output of the year and then writes the MACC tables.
+1. ``pixi run snakemake`` for ``{year}-BAU``, including PyPSA post-processing.
+2. Read that BAU and write the absolute CO2 caps.
+3. ``pixi run snakemake`` for ``{year}-MACC_1`` through ``{year}-MACC_6``.
+4. After every scenario, write the study figures in ``macc/postprocessing``.
+5. ``pixi run snakemake macc_postprocess``, which waits for every PyPSA
+   post-processing output of the year and writes the tables again.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from macc.common import (  # noqa: E402
-    REMAINING,
     ROOT,
+    STEPS,
     YEARS,
     config_path,
     dump_yaml,
@@ -81,6 +82,10 @@ def solve_scenario(year: int, scenario: str, cores: str, directory: Path) -> Non
         [config_path(year), _selector(directory, year, scenario)],
         target=None,
     )
+    print(f"\n=== {scenario}: study figures ===", flush=True)
+    from macc.postprocessing import update
+
+    update()
 
 
 def solve_year(year: int, cores: str, directory: Path) -> None:
@@ -88,18 +93,18 @@ def solve_year(year: int, cores: str, directory: Path) -> None:
         raise SystemExit(
             f"Missing {config_path(year)}. Run python -m macc.generate_scenarios."
         )
-    reference = scenario_name(year, 1.0)
-    solve_scenario(year, reference, cores, directory)
+    bau = scenario_name(year, 0.0)
+    solve_scenario(year, bau, cores, directory)
 
-    print(f"\n=== {year}: CO2 caps from {reference} ===", flush=True)
+    print(f"\n=== {year}: CO2 caps from {bau} ===", flush=True)
     from macc.apply_reference_caps import apply_year, publish
 
     publish([apply_year(year)])
 
-    for remaining in REMAINING:
-        if abs(remaining - 1.0) < 1e-9:
+    for _label, reduction in STEPS:
+        if reduction == 0.0:
             continue
-        solve_scenario(year, scenario_name(year, remaining), cores, directory)
+        solve_scenario(year, scenario_name(year, reduction), cores, directory)
 
     print(f"\n=== {year}: MACC tables after PyPSA post-processing ===", flush=True)
     _snakemake(cores, [config_path(year)], target="macc_postprocess")

@@ -1,5 +1,49 @@
-2045-REF:
+2045-BAU:
   co2_budget:
     relative: false
     upper: null
     lower: null
+  macc:
+    bau: true
+2045-MACC_1:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false
+2045-MACC_2:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false
+2045-MACC_3:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false
+2045-MACC_4:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false
+2045-MACC_5:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false
+2045-MACC_6:
+  co2_budget:
+    relative: false
+    upper: null
+    lower: null
+  macc:
+    bau: false

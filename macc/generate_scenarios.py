@@ -2,23 +2,22 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Write one overnight config per planning year and the scenario matrix.
+"""Write one overnight config per planning year and the 42-scenario matrix.
 
 PyPSA-Eur builds collection targets from the top-level ``planning_horizons``,
 and a scenario is not allowed to change that list. Each year is therefore its
-own workflow. Inside a year the only difference between runs is the CO2 cap.
+own workflow. Costs, demand and the sector pathway follow that planning year.
+Inside a year, weather, fuel prices, technology costs, efficiencies and
+resolution are shared. BAU demand, generation and fuel supply follow the
+country sheets. The mitigation runs keep the PyPSA-Eur demand pathway.
 
-The scenario files written here contain the reference only. Constrained runs
-are added by ``apply_reference_caps`` once that year's reference emissions
-are known, because each cap is a fraction of its own reference:
+BAU has no extra CO2 cap. Its power capacities are fixed to the EU Reference
+Scenario 2020 when the network is solved. The six mitigation runs may invest,
+and their caps are fractions of that year's BAU emissions:
 
-    E_{y,r} = E_y^{REF} * remaining
+    E_{y,r} = E_{y,BAU} * (1 - r)
 
-``CO2_90`` allows 90% of the reference emissions (a 10% reduction). ``CO2_0``
-allows none. Ten allowances plus the reference, for six years, make 66 solves.
-
-Sector and industry pathways are not copied here. They stay in
-``config/config.default.yaml`` and the planning horizon selects the year.
+Those caps are written by ``apply_reference_caps`` after the BAU solve.
 """
 
 from __future__ import annotations
@@ -32,14 +31,16 @@ import pandas as pd
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from macc.bau_capacities import write_capacity_table  # noqa: E402
+from macc.bau_pathway import write_balance_table  # noqa: E402
 from macc.common import (  # noqa: E402
     CONFIG_DIR,
-    COST_YEAR,
+    COUNTRIES,
     CUTOUT,
     MACC_DIR,
-    REMAINING,
     RESULTS_PREFIX,
     SCENARIO_DIR,
+    STEPS,
     TECHNOLOGY_DATA_VERSION,
     TEMPORAL_RESOLUTION,
     WEATHER_YEAR,
@@ -47,7 +48,7 @@ from macc.common import (  # noqa: E402
     config_path,
     dump_yaml,
     load_yaml,
-    reduction_fraction,
+    remaining_fraction,
     scenario_name,
     scenario_path,
 )
@@ -55,52 +56,15 @@ from macc.export_pathways import export_pathways  # noqa: E402
 
 CONFIG_TEMPLATE = """\
 # Overnight MACC for planning year {year}.
-# Sector and industry pathways are taken from config/config.default.yaml.
-# This file freezes costs, weather, spatial resolution and the 6h time step.
-#
-# Solve this year with pixi. The reference is solved first, its emissions
-# set the CO2 caps, and each capped scenario is then solved on its own.
-# PyPSA post-processing runs for every scenario. The MACC tables run after that.
+# Demand and the sector pathway come from config/config.default.yaml.
+# Technology costs are this planning year's costs. Weather stays {weather_year}.
+# BAU is solved first. Its emissions set the CO2 caps of MACC_1..MACC_6.
 #   pixi run macc-year year={year}
-# All six years:
-#   pixi run macc
 foresight: overnight
 planning_horizons:
 - {year}
 countries:
-- AL
-- AT
-- BA
-- BE
-- BG
-- CH
-- CZ
-- DE
-- DK
-- EE
-- ES
-- FI
-- FR
-- GB
-- GR
-- HR
-- HU
-- IE
-- IT
-- LT
-- LU
-- LV
-- ME
-- MK
-- NL
-- 'NO'
-- PL
-- PT
-- RO
-- RS
-- SE
-- SI
-- SK
+{countries}
 snapshots:
   start: "{weather_start}"
   end: "{weather_end}"
@@ -111,10 +75,16 @@ co2_budget:
   upper: null
   lower: null
 costs:
-  year: {cost_year}
+  year: {year}
   emission_prices:
     enable: false
     co2: 0.0
+sector:
+  conventional_generation:
+    OCGT: gas
+    CCGT: gas
+    coal: coal
+    oil: oil
 atlite:
   default_cutout: {cutout}
 # One electricity node per country. Do not set n_clusters to "all":
@@ -138,6 +108,7 @@ solving:
       threads: 8
 macc:
   enable: true
+  bau: false
 data:
   costs:
     source: archive
@@ -154,13 +125,14 @@ run:
 """
 
 
-def reference_scenario() -> dict:
+def scenario_entry(reduction: float, upper=None) -> dict:
     return {
         "co2_budget": {
             "relative": False,
-            "upper": None,
+            "upper": upper,
             "lower": None,
-        }
+        },
+        "macc": {"bau": abs(reduction) < 1e-9},
     }
 
 
@@ -178,11 +150,13 @@ def scenario_file_has_caps(path: Path) -> bool:
 def write_config(year: int) -> Path:
     start = f"{WEATHER_YEAR}-01-01 00:00"
     end = f"{WEATHER_YEAR}-12-31 23:00"
+    countries = "\n".join(f"- {code}" for code in COUNTRIES)
     text = CONFIG_TEMPLATE.format(
         year=year,
+        weather_year=WEATHER_YEAR,
         weather_start=start,
         weather_end=end,
-        cost_year=COST_YEAR,
+        countries=countries,
         cutout=CUTOUT,
         temporal=TEMPORAL_RESOLUTION,
         technology_data_version=TECHNOLOGY_DATA_VERSION,
@@ -196,27 +170,30 @@ def write_config(year: int) -> Path:
 
 def write_scenario_file(year: int, force: bool) -> Path:
     path = scenario_path(year)
-    if path.exists() and scenario_file_has_caps(path) and not force:
-        print(
-            f"Keeping {path.relative_to(MACC_DIR.parent)} because it already "
-            "contains CO2 caps. Pass --force to reset it to the reference only."
-        )
-        return path
-    name = scenario_name(year, 1.0)
-    dump_yaml(path, {name: reference_scenario()})
+    scenarios = {}
+    for _label, reduction in STEPS:
+        name = scenario_name(year, reduction)
+        upper = None
+        if path.exists() and not force:
+            current = load_yaml(path).get(name, {})
+            stored = current.get("co2_budget", {}).get("upper")
+            if isinstance(stored, (int, float)):
+                upper = stored
+        scenarios[name] = scenario_entry(reduction, upper)
+    dump_yaml(path, scenarios)
     return path
 
 
 def write_matrix(path: Path, force: bool) -> pd.DataFrame:
     rows = []
     for year in YEARS:
-        for remaining in REMAINING:
+        for _label, reduction in STEPS:
             rows.append(
                 {
                     "year": year,
-                    "scenario": scenario_name(year, remaining),
-                    "remaining_fraction": round(remaining, 10),
-                    "reduction_fraction": round(reduction_fraction(remaining), 10),
+                    "scenario": scenario_name(year, reduction),
+                    "reduction_fraction": reduction,
+                    "remaining_fraction": remaining_fraction(reduction),
                     "co2_cap_gt_per_year": pd.NA,
                 }
             )
@@ -237,6 +214,8 @@ def write_matrix(path: Path, force: bool) -> pd.DataFrame:
 def generate(force: bool = False) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     SCENARIO_DIR.mkdir(parents=True, exist_ok=True)
+    write_capacity_table()
+    write_balance_table()
     assumptions_path, checks_path = export_pathways()
     for year in YEARS:
         write_config(year)

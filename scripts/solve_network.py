@@ -1236,6 +1236,10 @@ def extra_functionality(
     ``snakemake.config`` are expected to be attached to the network.
     """
     config = n.config
+    if config.get("macc", {}).get("bau"):
+        from macc.bau_pathway import add_bau_energy_constraints
+
+        add_bau_energy_constraints(n, snapshots)
     constraints = config["solving"].get("constraints", {})
     if constraints["BAU"] and n.generators.p_nom_extendable.any():
         add_BAU_constraints(n, config)
@@ -1501,6 +1505,14 @@ if __name__ == "__main__":
         limit_max_growth=snakemake.params["sector"]["limit_max_growth"],
         rolling_horizon=cf_solving["rolling_horizon"],
     )
+
+    if snakemake.config.get("macc", {}).get("bau"):
+        from macc.bau_capacities import apply_bau_capacities
+        from macc.bau_pathway import apply_bau_pathway
+
+        year = int(str(planning_horizons))
+        apply_bau_capacities(n, year)
+        apply_bau_pathway(n, year)
 
     # Determine solve mode
     rolling_horizon = cf_solving["rolling_horizon"]

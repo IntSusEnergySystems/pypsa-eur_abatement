@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Fill absolute CO2 caps from each year's solved reference network.
+"""Fill absolute CO2 caps from each year's solved BAU network.
 
-The reference is unconstrained. Its annual atmosphere-store emissions are
-``E_y^REF``. A constrained scenario then receives
+BAU has no extra CO2 cap. Its annual atmosphere-store emissions are
+``E_y,BAU``. A mitigation scenario with reduction ``r`` then receives
 
-    co2_budget.upper = E_y^REF * remaining
+    co2_budget.upper = E_y,BAU * (1 - r)
 
-in Gt/year, with ``relative: false``. ``CO2_90`` uses remaining 0.9.
-Re-running this script recomputes the caps from the reference networks.
+in Gt/year, with ``relative: false``. ``MACC_1`` uses ``r = 0.1``.
+Re-running this script recomputes the caps from the BAU networks.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ if __package__ in {None, ""}:
 from macc.common import (  # noqa: E402
     EMISSION_TOLERANCE_T,
     MACC_DIR,
-    REMAINING,
     RESULTS_DIR,
+    STEPS,
     TONNES_PER_GT,
     YEARS,
     dump_yaml,
@@ -39,69 +39,53 @@ from macc.common import (  # noqa: E402
     solved_network_path,
     tonnes_to_gt_per_year,
 )
+from macc.generate_scenarios import scenario_entry  # noqa: E402
 from macc.extract_results import annual_co2_tonnes  # noqa: E402
 
 
-def cap_gt(reference_tonnes: float, remaining: float) -> float:
+def cap_gt(bau_tonnes: float, reduction: float) -> float:
     """Annual cap in Gt, rounded to the nearest tonne."""
-    tonnes = reference_tonnes * remaining
+    tonnes = bau_tonnes * (1.0 - reduction)
     if abs(tonnes) < EMISSION_TOLERANCE_T:
         return 0.0
     return round(tonnes / TONNES_PER_GT, 9)
 
 
-def co2_override(upper) -> dict:
-    return {
-        "co2_budget": {
-            "relative": False,
-            "upper": upper,
-            "lower": None,
-        }
-    }
-
-
 def apply_year(year: int) -> dict:
-    reference = scenario_name(year, 1.0)
-    network = solved_network_path(reference)
+    bau = scenario_name(year, 0.0)
+    network = solved_network_path(bau)
     if not network.exists():
         raise SystemExit(
-            f"Missing reference network {network}. Solve {reference} before "
-            "setting the CO2 caps."
+            f"Missing BAU network {network}. Solve {bau} before setting the CO2 caps."
         )
     import pypsa
 
     solved = pypsa.Network(network)
-    reference_tonnes, nyears = annual_co2_tonnes(solved)
-    scenarios = {reference: co2_override(None)}
+    bau_tonnes, nyears = annual_co2_tonnes(solved)
+    if bau_tonnes < 0:
+        raise SystemExit(
+            f"{bau} emissions are negative ({bau_tonnes} t). "
+            "The cap E_BAU*(1-r) is defined for a positive BAU."
+        )
+    scenarios = {}
     caps = []
-    for remaining in REMAINING:
-        name = scenario_name(year, remaining)
-        if remaining == 1.0:
-            upper = None
-        else:
-            upper = cap_gt(reference_tonnes, remaining)
-            if upper < 0:
-                raise SystemExit(
-                    f"{reference} emissions are negative ({reference_tonnes} t). "
-                    "The reduction formula E*(1-r) is defined for a positive "
-                    "reference."
-                )
-        scenarios[name] = co2_override(None if remaining == 1.0 else upper)
+    for _label, reduction in STEPS:
+        name = scenario_name(year, reduction)
+        upper = None if reduction == 0.0 else cap_gt(bau_tonnes, reduction)
+        scenarios[name] = scenario_entry(reduction, upper)
         caps.append(
             {
                 "year": year,
                 "scenario": name,
-                "remaining_fraction": remaining,
+                "reduction_fraction": reduction,
                 "co2_cap_gt_per_year": upper,
             }
         )
-    # REF stays first and keeps a null cap. The loop above rewrites it; the
-    # insertion order still starts at REF because REMAINING starts at 1.
     dump_yaml(scenario_path(year), scenarios)
     return {
         "year": year,
-        "reference_emissions_t_per_year": reference_tonnes,
-        "reference_emissions_gt_per_year": tonnes_to_gt_per_year(reference_tonnes),
+        "bau_emissions_t_per_year": bau_tonnes,
+        "bau_emissions_gt_per_year": tonnes_to_gt_per_year(bau_tonnes),
         "nyears": nyears,
         "caps": caps,
     }
@@ -131,16 +115,14 @@ def publish(applied: list[dict]) -> None:
         [
             {
                 "year": item["year"],
-                "reference_emissions_t_per_year": item["reference_emissions_t_per_year"],
-                "reference_emissions_gt_per_year": item[
-                    "reference_emissions_gt_per_year"
-                ],
+                "bau_emissions_t_per_year": item["bau_emissions_t_per_year"],
+                "bau_emissions_gt_per_year": item["bau_emissions_gt_per_year"],
                 "nyears": item["nyears"],
             }
             for item in applied
         ]
     )
-    summary_path = RESULTS_DIR / "reference_emissions.csv"
+    summary_path = RESULTS_DIR / "bau_emissions.csv"
     if summary_path.exists():
         previous = pd.read_csv(summary_path)
         summary = pd.concat(
@@ -151,9 +133,9 @@ def publish(applied: list[dict]) -> None:
     if (MACC_DIR / "scenario_matrix.csv").exists():
         update_matrix(applied)
     for item in applied:
-        tonnes = item["reference_emissions_t_per_year"]
+        tonnes = item["bau_emissions_t_per_year"]
         print(
-            f"{item['year']}: reference emissions "
+            f"{item['year']}: BAU emissions "
             f"{tonnes / 1e6:.3f} Mt/year, wrote {scenario_path(item['year']).name}"
         )
 
@@ -172,19 +154,18 @@ def main() -> None:
     applied = []
     skipped = []
     for year in years:
-        network = solved_network_path(scenario_name(year, 1.0))
+        network = solved_network_path(scenario_name(year, 0.0))
         if args.year is None and not network.exists():
             skipped.append(year)
             continue
         applied.append(apply_year(year))
     if not applied:
         raise SystemExit(
-            "No reference networks found under results/macc/. Solve a "
-            "reference scenario first."
+            "No BAU networks found under results/macc/. Solve a BAU scenario first."
         )
     publish(applied)
     if skipped:
-        print("Skipped years without a reference network: " + ", ".join(map(str, skipped)))
+        print("Skipped years without a BAU network: " + ", ".join(map(str, skipped)))
     # Touch parse so a renamed scenario cannot drift from the matrix silently.
     for item in applied:
         for row in item["caps"]:

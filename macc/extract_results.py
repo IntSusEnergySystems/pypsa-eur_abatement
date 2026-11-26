@@ -21,6 +21,7 @@ import pypsa
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from macc.postprocessing.costs import cost_components  # noqa: E402
 from macc.common import (  # noqa: E402
     MACC_DIR,
     RESULTS_DIR,
@@ -115,10 +116,12 @@ def extract() -> tuple[pd.DataFrame, pd.DataFrame]:
         if not path.exists():
             missing.append(name)
             continue
-        year, remaining = parse_scenario_name(name)
+        year, reduction = parse_scenario_name(name)
+        remaining = 1.0 - reduction
         network = pypsa.Network(path)
         emissions_t, nyears = annual_co2_tonnes(network)
         total, capital, marginal = annual_system_cost(network)
+        components = cost_components(network, year)
         cap_t = _configured_cap_tonnes(year, name)
         constraint = pd.NA
         if "CO2Limit-upper" in network.global_constraints.index:
@@ -134,6 +137,7 @@ def extract() -> tuple[pd.DataFrame, pd.DataFrame]:
                 "system_cost_eur_per_year": total,
                 "capital_cost_eur_per_year": capital,
                 "marginal_cost_eur_per_year": marginal,
+                **components,
                 "objective": float(network.objective),
                 "emissions_t_per_year": emissions_t,
                 "emissions_mt_per_year": emissions_t / 1e6,

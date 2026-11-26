@@ -1,23 +1,15 @@
 # Overnight MACC for planning year 2045.
-# Sector and industry pathways are taken from config/config.default.yaml.
-# This file freezes costs, weather, spatial resolution and the 6h time step.
-#
-# Solve this year with pixi. The reference is solved first, its emissions
-# set the CO2 caps, and each capped scenario is then solved on its own.
-# PyPSA post-processing runs for every scenario. The MACC tables run after that.
+# Demand and the sector pathway come from config/config.default.yaml.
+# Technology costs are this planning year's costs. Weather stays 2013.
+# BAU is solved first. Its emissions set the CO2 caps of MACC_1..MACC_6.
 #   pixi run macc-year year=2045
-# All six years:
-#   pixi run macc
 foresight: overnight
 planning_horizons:
 - 2045
 countries:
-- AL
 - AT
-- BA
 - BE
 - BG
-- CH
 - CZ
 - DE
 - DK
@@ -25,7 +17,6 @@ countries:
 - ES
 - FI
 - FR
-- GB
 - GR
 - HR
 - HU
@@ -34,14 +25,10 @@ countries:
 - LT
 - LU
 - LV
-- ME
-- MK
 - NL
-- 'NO'
 - PL
 - PT
 - RO
-- RS
 - SE
 - SI
 - SK
@@ -55,10 +42,16 @@ co2_budget:
   upper: null
   lower: null
 costs:
-  year: 2025
+  year: 2045
   emission_prices:
     enable: false
     co2: 0.0
+sector:
+  conventional_generation:
+    OCGT: gas
+    CCGT: gas
+    coal: coal
+    oil: oil
 atlite:
   default_cutout: europe-2013-sarah3-era5
 # One electricity node per country. Do not set n_clusters to "all":
@@ -82,6 +75,7 @@ solving:
       threads: 8
 macc:
   enable: true
+  bau: false
 data:
   costs:
     source: archive

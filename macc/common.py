@@ -20,57 +20,86 @@ RESULTS_DIR = MACC_DIR / "results"
 DEFAULT_CONFIG = ROOT / "config" / "config.default.yaml"
 
 YEARS = [2025, 2030, 2035, 2040, 2045, 2050]
-# Allowed emissions as a fraction of that year's own unconstrained reference.
-# CO2_90 keeps 90% of reference emissions. REF is the unconstrained case.
-REMAINING = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
+# Reduction from that year's BAU emissions. BAU has no extra CO2 cap.
+# MACC_1 is a 10% cut, MACC_6 is a 100% cut.
+STEPS = (
+    ("BAU", 0.0),
+    ("MACC_1", 0.1),
+    ("MACC_2", 0.2),
+    ("MACC_3", 0.4),
+    ("MACC_4", 0.6),
+    ("MACC_5", 0.8),
+    ("MACC_6", 1.0),
+)
 
-COST_YEAR = 2025
 TECHNOLOGY_DATA_VERSION = "v0.16.0"
 TEMPORAL_RESOLUTION = "6h"
 WEATHER_YEAR = 2013
 CUTOUT = "europe-2013-sarah3-era5"
 RESULTS_PREFIX = "macc"
+REFERENCE_WORKBOOK = MACC_DIR / "data" / "ref2020_energy-transport-ghg.xlsx"
 
-# Names that must not vary with the planning year. A year-keyed entry with one
-# of these fragments is a techno-economic parameter and has to stay at 2025.
-FROZEN_NAME_FRAGMENTS = (
-    "efficienc",
-    "investment",
-    "capital_cost",
-    "marginal_cost",
-    "discount",
-    "lifetime",
-    "fom",
-    "vom",
-)
+# EU Reference Scenario 2020 sheets, in PyPSA country codes. Greece is EL in
+# the workbook and GR here. Cyprus and Malta have sheets, but this model has
+# no network data for them. Countries without a sheet are not included.
+COUNTRIES = [
+    "AT",
+    "BE",
+    "BG",
+    "CZ",
+    "DE",
+    "DK",
+    "EE",
+    "ES",
+    "FI",
+    "FR",
+    "GR",
+    "HR",
+    "HU",
+    "IE",
+    "IT",
+    "LT",
+    "LU",
+    "LV",
+    "NL",
+    "PL",
+    "PT",
+    "RO",
+    "SE",
+    "SI",
+    "SK",
+]
 
 TONNES_PER_GT = 1e9
 # co2_budget.upper is an annual cap in Gt. Ignore sub-tonne numerical dust.
 EMISSION_TOLERANCE_T = 1.0
 
 
-def scenario_name(year: int, remaining: float) -> str:
-    """Return the run name for one year and one emissions allowance."""
-    if abs(remaining - 1.0) < 1e-9:
-        return f"{year}-REF"
-    percent = int(round(remaining * 100))
-    return f"{year}-CO2_{percent}"
+def scenario_name(year: int, reduction: float) -> str:
+    """Return the run name for one year and one reduction from BAU."""
+    for label, value in STEPS:
+        if abs(value - reduction) < 1e-9:
+            return f"{year}-{label}"
+    known = ", ".join(str(value) for _, value in STEPS)
+    raise ValueError(f"Reduction {reduction} is not one of {known}.")
 
 
 def parse_scenario_name(name: str) -> tuple[int, float]:
-    """Return ``(year, remaining_fraction)`` from a run name."""
+    """Return ``(year, reduction_fraction)`` from a run name."""
     year_text, label = name.split("-", 1)
     year = int(year_text)
-    if label == "REF":
-        return year, 1.0
-    if not label.startswith("CO2_"):
-        raise ValueError(f"Unrecognised scenario name {name!r}.")
-    remaining = int(label.removeprefix("CO2_")) / 100
-    return year, remaining
+    for step_label, reduction in STEPS:
+        if label == step_label:
+            return year, reduction
+    raise ValueError(f"Unrecognised scenario name {name!r}.")
 
 
-def reduction_fraction(remaining: float) -> float:
-    return 1.0 - remaining
+def reduction_fraction(reduction: float) -> float:
+    return reduction
+
+
+def remaining_fraction(reduction: float) -> float:
+    return round(1.0 - reduction, 10)
 
 
 def config_path(year: int) -> Path:
@@ -150,11 +179,6 @@ def year_value(item, investment_year: int):
     return lower + (higher - lower) * (investment_year - lower_key) / (
         higher_key - lower_key
     )
-
-
-def looks_frozen(parameter: str) -> bool:
-    name = parameter.lower()
-    return any(fragment in name for fragment in FROZEN_NAME_FRAGMENTS)
 
 
 def marginal_abatement_cost(

@@ -5,9 +5,9 @@
 """Write the exogenous pathway used by every MACC year.
 
 Values come from ``config/config.default.yaml``. A planning horizon selects
-the matching year with the same rules as ``scripts._helpers.get``. Nothing in
-the MACC configs overrides ``sector`` or ``industry``, so every CO2 case in a
-year sees this same pathway.
+the matching year with the same rules as ``scripts._helpers.get``. Technology
+costs use that same planning year. Within one year, BAU and the mitigation
+runs see this same pathway.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from macc.common import (  # noqa: E402
-    COST_YEAR,
     CUTOUT,
     DEFAULT_CONFIG,
     PATHWAY_DIR,
@@ -30,7 +29,6 @@ from macc.common import (  # noqa: E402
     WEATHER_YEAR,
     YEARS,
     load_yaml,
-    looks_frozen,
     year_map,
     year_value,
 )
@@ -89,22 +87,15 @@ def pathway_table(config: dict) -> pd.DataFrame:
     for section in ("sector", "industry"):
         for path, mapped in iter_year_maps(config[section], (section,)):
             parameter = ".".join(path)
-            frozen = looks_frozen(path[-1])
             values = [year_value(mapped, year) for year in YEARS]
-            varies = len(set(values)) > 1
-            if frozen and varies:
-                raise SystemExit(
-                    f"{parameter} changes across planning years. Technology "
-                    "costs and efficiencies must stay at the 2025 value for "
-                    "this experiment."
-                )
+            varies = len({value for value in values}) > 1
             for year, value in zip(YEARS, values):
                 rows.append(
                     {
                         "parameter": parameter,
                         "year": year,
                         "value": value,
-                        "pathway": "fixed" if frozen or not varies else "evolves",
+                        "pathway": "evolves" if varies else "fixed",
                         "note": INACTIVE_NOTES.get(parameter, ""),
                     }
                 )
@@ -116,7 +107,7 @@ def _scalar_rows(config: dict) -> pd.DataFrame:
     sector = config["sector"]
     industry = config["industry"]
     fixed = {
-        "costs.year": COST_YEAR,
+        "costs.year": "planning year",
         "costs.social_discountrate": config["costs"]["social_discountrate"],
         "costs.fill_values.discount rate": config["costs"]["fill_values"][
             "discount rate"

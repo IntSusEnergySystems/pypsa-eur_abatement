@@ -38,6 +38,7 @@ rule macc_postprocess:
         comparison="macc/results/macc_by_reduction.csv",
         steps="macc/results/macc_carrier_steps.csv",
         figures=directory("macc/results/figures"),
+        study=directory("macc/postprocessing/figures"),
     log:
         "macc/results/logs/macc_postprocess_%s.log"
         % config["planning_horizons"][0],
@@ -45,5 +46,6 @@ rule macc_postprocess:
         """
         python -m macc.extract_results && \
         python -m macc.compute_macc && \
-        python -m macc.plot_macc
+        python -m macc.plot_macc && \
+        python -m macc.postprocessing
         """

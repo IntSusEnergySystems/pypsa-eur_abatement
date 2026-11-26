@@ -107,7 +107,7 @@ industry.sector_ratios_fraction_future,2035,0.45,evolves,
 industry.sector_ratios_fraction_future,2040,0.7,evolves,
 industry.sector_ratios_fraction_future,2045,0.85,evolves,
 industry.sector_ratios_fraction_future,2050,1.0,evolves,
-costs.year,all,2025,fixed,Same value in every planning year and every CO2 case.
+costs.year,all,planning year,fixed,Same value in every planning year and every CO2 case.
 costs.social_discountrate,all,0.02,fixed,Same value in every planning year and every CO2 case.
 costs.fill_values.discount rate,all,0.07,fixed,Same value in every planning year and every CO2 case.
 data.costs.version,all,v0.16.0,fixed,Same value in every planning year and every CO2 case.
