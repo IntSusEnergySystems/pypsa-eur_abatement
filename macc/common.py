@@ -40,8 +40,10 @@ RESULTS_PREFIX = "macc"
 REFERENCE_WORKBOOK = MACC_DIR / "data" / "ref2020_energy-transport-ghg.xlsx"
 
 # EU Reference Scenario 2020 sheets, in PyPSA country codes. Greece is EL in
-# the workbook and GR here. Cyprus and Malta have sheets, but this model has
-# no network data for them. Countries without a sheet are not included.
+# the workbook and GR here. Ireland is left out: without Great Britain its
+# land and sea area is disconnected from the modelled region. Cyprus and Malta
+# have sheets, but this model has no network data for them. Countries without
+# a sheet are not included.
 COUNTRIES = [
     "AT",
     "BE",
@@ -56,7 +58,6 @@ COUNTRIES = [
     "GR",
     "HR",
     "HU",
-    "IE",
     "IT",
     "LT",
     "LU",

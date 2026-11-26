@@ -120,9 +120,11 @@ and the mitigation caps are taken from the solved BAU emissions.
 
 The model keeps the EU members this PyPSA-Eur build can represent and that
 have a country sheet: AT, BE, BG, CZ, DE, DK, EE, ES, FI, FR, GR, HR, HU,
-IE, IT, LT, LU, LV, NL, PL, PT, RO, SE, SI and SK. Greece is `EL` in the
-workbook and `GR` in the model. Cyprus and Malta have sheets, but this model
-has no network data for them. Countries without a sheet are not included.
+IT, LT, LU, LV, NL, PL, PT, RO, SE, SI and SK. Greece is `EL` in the
+workbook and `GR` in the model. Ireland is left out because, without Great
+Britain, its land and sea area is disconnected from the modelled region.
+Cyprus and Malta have sheets, but this model has no network data for them.
+Countries without a sheet are not included.
 
 ## What is the same within a year
 
