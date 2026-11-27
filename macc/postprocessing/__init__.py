@@ -14,7 +14,7 @@ TABLE_DIR = POST_DIR / "tables"
 
 
 def update() -> None:
-    """Refresh tables and the five study figures from every solved network."""
+    """Refresh tables and the four study figures from every solved network."""
     from macc.compute_macc import compute
     from macc.extract_results import extract
     from macc.postprocessing.figures import write_figures

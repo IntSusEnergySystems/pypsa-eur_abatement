@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Compare each solved BAU with the EU sheets of the reference workbook.
+"""Compare each planning year's BAU with the mitigation scenarios of that year.
 
-Capacity, electricity generation and energy CO2 are read from ``EU_B``.
-Sectoral final energy is read from ``EU_A``, and international bunkers from
-``EU_B``. The model side is the solved network.
+Once a year's BAU is solved, it is compared with the EU reference sheet.
+Each mitigation scenario of that year adds a bar when its network exists.
+A scenario whose annual cost is more than five times that year's BAU is
+left out.
 """
 
 from __future__ import annotations
@@ -23,14 +24,17 @@ from macc.bau_capacities import (
 from macc.bau_pathway import (
     AVIATION_LOADS,
     BUILDING_LOADS,
-    INDUSTRY_LOADS,
     KTOE_TO_MWH,
-    SHIPPING_LOADS,
-    TRANSPORT_LOADS,
     _annual_mwh,
-    _loads,
 )
-from macc.common import REFERENCE_WORKBOOK, YEARS, solved_network_path
+from macc.common import (
+    REFERENCE_WORKBOOK,
+    RESULTS_DIR,
+    STEPS,
+    YEARS,
+    scenario_name,
+    solved_network_path,
+)
 from macc.extract_results import annual_co2_tonnes
 
 GWH_TO_TWH = 1e-3
@@ -56,15 +60,80 @@ GENERATION_ROWS = {
     **PLANT_ROWS,
     "Geothermal heat, other renewables (tidal etc.)": "geothermal",
 }
-# Residential and tertiary are one buildings total in the BAU. Tertiary on
-# the sheet already includes agriculture.
+# Residential and tertiary are one buildings total. Maritime includes every
+# shipping fuel, so a mitigation run's methanol is not dropped.
 CONSUMPTION_SECTORS = (
-    ("industry", "Industry", INDUSTRY_LOADS),
-    ("buildings", "Residential and tertiary", BUILDING_LOADS),
-    ("transport", "Transport", TRANSPORT_LOADS),
-    ("aviation", "International aviation", AVIATION_LOADS),
-    ("maritime", "International maritime", SHIPPING_LOADS),
+    ("industry", "Industry"),
+    ("buildings", "Residential and tertiary"),
+    ("transport", "Transport"),
+    ("aviation", "International aviation"),
+    ("maritime", "International maritime"),
 )
+# Same fleet as the BAU capacity fix, plus the capture and CHP units a
+# mitigation run is allowed to build. This does not change the BAU freeze.
+COMPARISON_COMPONENTS = {
+    **PLANT_COMPONENTS,
+    "biomass": [
+        *PLANT_COMPONENTS["biomass"],
+        ("links", "urban central solid biomass CHP CC", False),
+    ],
+    "coal": [*PLANT_COMPONENTS["coal"], ("links", "coal CC", False)],
+    "gas": [
+        *PLANT_COMPONENTS["gas"],
+        ("links", "CCGT CC", False),
+        ("links", "urban central gas CHP", False),
+        ("links", "urban central gas CHP CC", False),
+    ],
+}
+SERIES_ORDER = ("EU", "BAU", "MACC_1", "MACC_2", "MACC_3", "MACC_4", "MACC_5", "MACC_6")
+SERIES_LABELS = {
+    "EU": "EU reference",
+    "BAU": "BAU",
+    "MACC_1": "MACC 1 (10% CO2 cap decrease vs BAU)",
+    "MACC_2": "MACC 2 (20% CO2 cap decrease vs BAU)",
+    "MACC_3": "MACC 3 (40% CO2 cap decrease vs BAU)",
+    "MACC_4": "MACC 4 (60% CO2 cap decrease vs BAU)",
+    "MACC_5": "MACC 5 (80% CO2 cap decrease vs BAU)",
+    "MACC_6": "MACC 6 (100% CO2 cap decrease vs BAU)",
+}
+# Kept so older callers still find the mitigation names.
+STEP_LABELS = {key: value for key, value in SERIES_LABELS.items() if key != "EU"}
+# A solved run is left out of the plots when it costs more than this multiple of BAU.
+COST_LIMIT = 5.0
+COST_GROUPS = {
+    "Solar": ["solar", "solar rooftop", "solar-hsat"],
+    "Onshore wind": ["onwind"],
+    "Offshore wind": ["offwind-ac", "offwind-dc", "offwind-float"],
+    "Nuclear": ["nuclear"],
+    "Coal": ["coal", "lignite", "coal CC"],
+    "Gas": ["CCGT", "OCGT", "CCGT CC", "gas", "urban central gas CHP", "urban central gas CHP CC"],
+    "Oil": ["oil", "oil primary"],
+    "Hydro": ["ror", "hydro"],
+    "Biomass": ["urban central solid biomass CHP", "urban central solid biomass CHP CC"],
+    "Electrolysis": ["H2 Electrolysis"],
+    "Battery": ["battery", "home battery"],
+    "Hydrogen": ["H2 Store", "H2 turbine"],
+    "Heat pumps": [
+        "rural air heat pump",
+        "rural ground heat pump",
+        "urban central air heat pump",
+        "urban decentral air heat pump",
+    ],
+}
+
+
+def _metric(year, step, reduction, group, item, unit, value) -> dict:
+    return {
+        "year": year,
+        "scenario": f"{year}-{step}",
+        "step": step,
+        "reduction": reduction,
+        "label": SERIES_LABELS[step],
+        "group": group,
+        "item": item,
+        "unit": unit,
+        "value": value,
+    }
 
 
 def _row(year, country, group, item, unit, reference, model) -> dict:
@@ -83,9 +152,9 @@ def _row(year, country, group, item, unit, reference, model) -> dict:
     }
 
 
-def _electric_mw(network, country: str, plant: str) -> float:
+def _electric_mw(network, country: str, plant: str, components=None) -> float:
     total = 0.0
-    for table_name, carrier, direct in PLANT_COMPONENTS[plant]:
+    for table_name, carrier, direct in (components or PLANT_COMPONENTS)[plant]:
         table = getattr(network, table_name)
         names = _matching(network, table, carrier, country)
         if len(names) == 0:
@@ -112,10 +181,10 @@ def _dispatched(network, panel: pd.DataFrame, names: pd.Index) -> pd.Series:
     return panel[present].mul(_weights(network), axis=0).sum()
 
 
-def _generation_twh(network, country: str, plant: str) -> float:
-    """Electricity from the same components whose capacity is fixed to the sheet."""
+def _generation_twh(network, country: str, plant: str, components=None) -> float:
+    """Electricity from the plant components, in TWh."""
     total = 0.0
-    for table_name, carrier, direct in PLANT_COMPONENTS[plant]:
+    for table_name, carrier, direct in (components or PLANT_COMPONENTS)[plant]:
         table = getattr(network, table_name)
         names = _matching(network, table, carrier, country)
         if len(names) == 0:
@@ -247,6 +316,230 @@ def load_eu_sheet(year: int) -> dict[str, dict[str, float] | float]:
     }
 
 
+def _countries(network) -> list[str]:
+    present = set(network.buses.country.dropna().astype(str).unique())
+    return [country for country in present if country not in {"", "nan", "EU"}]
+
+
+def _sector_loads(network, country: str, sector: str) -> pd.Index:
+    """Loads that belong to one consumption sector in BAU or a mitigation run."""
+    carriers = network.loads.carrier.astype(str)
+    bus_country = network.loads.bus.map(network.buses.country).astype(str)
+    in_country = bus_country.eq(country)
+    if sector == "industry":
+        chosen = carriers.str.contains("industry", case=False) | carriers.eq("NH3")
+    elif sector == "buildings":
+        chosen = carriers.isin(BUILDING_LOADS)
+    elif sector == "transport":
+        chosen = carriers.str.startswith("land transport")
+    elif sector == "aviation":
+        chosen = carriers.isin(AVIATION_LOADS)
+    elif sector == "maritime":
+        chosen = carriers.str.startswith("shipping")
+    else:
+        chosen = pd.Series(False, index=network.loads.index)
+    return network.loads.index[chosen & in_country]
+
+
+def scenario_metrics(network, year: int, step: str, reduction: float) -> pd.DataFrame:
+    """Capacity, generation, CO2 and sectoral final energy for one solved run."""
+    countries = _countries(network)
+    rows = []
+    for plant, label in PLANT_LABELS.items():
+        capacity_gw = sum(
+            _electric_mw(network, country, plant, COMPARISON_COMPONENTS)
+            for country in countries
+        ) / 1e3
+        generation_twh = sum(
+            _generation_twh(network, country, plant, COMPARISON_COMPONENTS)
+            for country in countries
+        )
+        rows.append(
+            _metric(year, step, reduction, "capacity", label, "GW", capacity_gw)
+        )
+        rows.append(
+            _metric(year, step, reduction, "generation", label, "TWh", generation_twh)
+        )
+    for sector, label in CONSUMPTION_SECTORS:
+        served_mwh = sum(
+            _served_mwh(network, _sector_loads(network, country, sector))
+            for country in countries
+        )
+        rows.append(
+            _metric(
+                year,
+                step,
+                reduction,
+                "consumption",
+                label,
+                "TWh",
+                served_mwh * MWH_TO_TWH,
+            )
+        )
+    emissions_mt = annual_co2_tonnes(network)[0] / 1e6
+    rows.append(_metric(year, step, reduction, "emissions", "CO2", "Mt", emissions_mt))
+    rows.extend(_technology_rows(network, year, step, reduction))
+    return pd.DataFrame(rows)
+
+
+def _carrier_sum(series: pd.Series | pd.DataFrame) -> pd.Series:
+    if series is None or len(series) == 0:
+        return pd.Series(dtype=float)
+    if isinstance(series, pd.DataFrame):
+        series = series.stack()
+    if isinstance(series.index, pd.MultiIndex) and "carrier" in series.index.names:
+        series = series.groupby(level="carrier").sum()
+    return series
+
+
+def _grouped(series: pd.Series | pd.DataFrame) -> dict[str, float]:
+    values = _carrier_sum(series)
+    totals = {}
+    for label, names in COST_GROUPS.items():
+        present = [name for name in names if name in values.index]
+        totals[label] = float(values.loc[present].sum()) if present else 0.0
+    return totals
+
+
+def _fuel_twh(network, carriers: set[str]) -> float:
+    generators = network.generators
+    names = generators.index[generators.carrier.astype(str).isin(carriers)]
+    energy = _dispatched(network, network.generators_t.p, names)
+    if len(energy) == 0:
+        return 0.0
+    return float(energy.sum()) * MWH_TO_TWH
+
+
+def _store_gwh(network, carriers: set[str]) -> float:
+    stores = network.stores
+    names = stores.index[stores.carrier.astype(str).isin(carriers)]
+    if len(names) == 0:
+        return 0.0
+    column = "e_nom_opt" if "e_nom_opt" in stores.columns else "e_nom"
+    return float(stores.loc[names, column].astype(float).sum()) / 1e3
+
+
+def _technology_rows(network, year: int, step: str, reduction: float) -> list[dict]:
+    """Fossil use, electrolysers, storage, investment and operating cost."""
+    rows = [
+        _metric(year, step, reduction, "fossil", "Coal", "TWh", _fuel_twh(network, {"coal", "lignite"})),
+        _metric(year, step, reduction, "fossil", "Gas", "TWh", _fuel_twh(network, {"gas"})),
+        _metric(
+            year,
+            step,
+            reduction,
+            "fossil",
+            "Oil",
+            "TWh",
+            _fuel_twh(network, {"oil", "oil primary"}),
+        ),
+    ]
+    electrolysis = network.links.index[network.links.carrier.astype(str).eq("H2 Electrolysis")]
+    column = "p_nom_opt" if "p_nom_opt" in network.links.columns else "p_nom"
+    electrolyser_gw = 0.0
+    if len(electrolysis):
+        electrolyser_gw = float(network.links.loc[electrolysis, column].astype(float).sum()) / 1e3
+    rows.append(
+        _metric(year, step, reduction, "electrolyser", "Electrolysis", "GW", electrolyser_gw)
+    )
+    hydro = network.storage_units
+    pumped = hydro.index[hydro.carrier.astype(str).eq("PHS")]
+    pumped_gwh = 0.0
+    if len(pumped) and "max_hours" in hydro.columns:
+        power = hydro.loc[pumped, column].astype(float)
+        pumped_gwh = float((power * hydro.loc[pumped, "max_hours"].astype(float)).sum()) / 1e3
+    for label, gwh in (
+        ("Battery", _store_gwh(network, {"battery", "home battery"})),
+        ("Hydrogen", _store_gwh(network, {"H2 Store"})),
+        ("Heat storage", _store_gwh(network, {
+            "rural water tanks",
+            "urban central water pits",
+            "urban central water tanks",
+            "urban decentral water tanks",
+        })),
+        ("Pumped hydro", pumped_gwh),
+    ):
+        rows.append(_metric(year, step, reduction, "storage", label, "GWh", gwh))
+    for label, value in _grouped(network.statistics.capex()).items():
+        rows.append(_metric(year, step, reduction, "investment", label, "M€/year", value / 1e6))
+    for label, value in _grouped(network.statistics.opex()).items():
+        rows.append(_metric(year, step, reduction, "operating", label, "M€/year", value / 1e6))
+    return rows
+
+
+def eu_reference_metrics(year: int) -> pd.DataFrame:
+    """EU sheet values on the same rows as a solved scenario."""
+    sheet = load_eu_sheet(year)
+    rows = []
+    for plant, label in PLANT_LABELS.items():
+        rows.append(
+            _metric(year, "EU", pd.NA, "capacity", label, "GW", float(sheet["capacity_mw"][plant]) / 1e3)
+        )
+        rows.append(
+            _metric(
+                year,
+                "EU",
+                pd.NA,
+                "generation",
+                label,
+                "TWh",
+                float(sheet["generation_gwh"][plant]) * GWH_TO_TWH,
+            )
+        )
+    for key, label in CONSUMPTION_SECTORS:
+        rows.append(
+            _metric(
+                year,
+                "EU",
+                pd.NA,
+                "consumption",
+                label,
+                "TWh",
+                float(sheet["consumption_ktoe"][key]) * KTOE_TO_MWH * MWH_TO_TWH,
+            )
+        )
+    rows.append(_metric(year, "EU", pd.NA, "emissions", "CO2", "Mt", float(sheet["energy_co2_mt"])))
+    return pd.DataFrame(rows)
+
+
+def _recorded_cost(name: str) -> float | None:
+    path = RESULTS_DIR / "scenario_summary.csv"
+    if not path.exists():
+        return None
+    frame = pd.read_csv(path)
+    rows = frame.loc[frame["scenario"] == name, "system_cost_eur_per_year"]
+    if rows.empty:
+        return None
+    return float(rows.iloc[0])
+
+
+def keep_scenario(year: int, step: str) -> bool:
+    """False when a mitigation run costs more than five times that year's BAU."""
+    if step == "BAU":
+        return solved_network_path(scenario_name(year, 0.0)).exists()
+    name = f"{year}-{step}"
+    if not solved_network_path(name).exists():
+        return False
+    bau_cost = _recorded_cost(f"{year}-BAU")
+    cost = _recorded_cost(name)
+    if bau_cost is None or cost is None or bau_cost <= 0:
+        return True
+    if cost > COST_LIMIT * bau_cost:
+        print(f"Leave {name} out of the plots: its cost is more than 5 times {year}-BAU.")
+        return False
+    return True
+
+
+def missing_scenarios(year: int) -> list[str]:
+    """Scenario names of one planning year that have no solved network yet."""
+    missing = []
+    for _step, reduction in STEPS:
+        name = scenario_name(year, reduction)
+        if not solved_network_path(name).exists():
+            missing.append(name)
+    return missing
+
+
 def compare_network(network, year: int) -> pd.DataFrame:
     """EU_B reference against the solved BAU."""
     sheet = load_eu_sheet(year)
@@ -280,10 +573,11 @@ def compare_network(network, year: int) -> pd.DataFrame:
             )
         )
     countries = [country for country in present if country not in {"", "nan", "EU"}]
-    for key, label, carriers in CONSUMPTION_SECTORS:
+    for key, label in CONSUMPTION_SECTORS:
         reference_twh = float(sheet["consumption_ktoe"][key]) * KTOE_TO_MWH * MWH_TO_TWH
         model_mwh = sum(
-            _served_mwh(network, _loads(network, country, carriers)) for country in countries
+            _served_mwh(network, _sector_loads(network, country, key))
+            for country in countries
         )
         rows.append(
             _row(
@@ -312,15 +606,24 @@ def compare_network(network, year: int) -> pd.DataFrame:
 
 
 def comparison_table() -> pd.DataFrame:
-    """One table for every solved ``{year}-BAU`` network."""
+    """EU reference, BAU and every finished mitigation run that stays within the cost limit.
+
+    A year starts as soon as its BAU network exists. Mitigation bars are added
+    as those networks appear. Runs above five times the BAU cost are omitted.
+    """
     frames = []
     for year in YEARS:
-        path = solved_network_path(f"{year}-BAU")
-        if not path.exists():
+        if not solved_network_path(scenario_name(year, 0.0)).exists():
             continue
-        network = pypsa.Network(path)
-        frames.append(compare_network(network, year))
-        print(f"Compared {year}-BAU with the EU reference sheet")
+        frames.append(eu_reference_metrics(year))
+        print(f"Read the EU reference sheet for {year}")
+        for step, reduction in STEPS:
+            if not keep_scenario(year, step):
+                continue
+            name = scenario_name(year, reduction)
+            network = pypsa.Network(solved_network_path(name))
+            frames.append(scenario_metrics(network, year, step, reduction))
+            print(f"Read {name}")
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)

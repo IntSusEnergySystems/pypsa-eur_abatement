@@ -22,7 +22,7 @@ time if a solve for that year is already going.
 ## How one planning year is solved
 
 `macc/config/config.{year}.yaml` sets the planning year, technology-data
-v0.16.0 costs for that year, weather year 2013, a 6 h time step, and one
+v0.16.0 costs and efficiencies from the 2025 cost file, weather year 2013, a 6 h time step, and one
 node per country. The sector network is built once for that year and reused.
 BAU then changes the fleet and the demand in memory. The mitigation runs
 leave investment open and add a CO2 cap. BAU industry uses today's specific
@@ -37,7 +37,10 @@ path, from 0.05 in 2025 to 1 in 2050.
    `macc/scenarios/{year}.yaml`.
 3. Solve `{year}-MACC_1` through `{year}-MACC_6`. These keep the PyPSA-Eur
    demand pathway for that year, may invest, and must stay under the cap.
-4. After every scenario, write the study figures in `macc/postprocessing`.
+4. After every scenario, refresh the study figures in `macc/postprocessing`.
+   The EU reference and BAU are drawn as soon as that year's BAU exists, and
+   each finished mitigation scenario adds a bar. A run costing more than
+   five times BAU is left out.
 5. Run `macc_postprocess` once the year's own PyPSA plots exist.
 
 Snakemake skips files that already exist. `--rerun-incomplete` rebuilds a
@@ -136,43 +139,51 @@ Countries without a sheet are not included.
 ## What is the same within a year
 
 Weather year 2013, fuel prices, technology costs, efficiencies, administrative
-clustering and the 6 h time step. Costs use technology-data v0.16.0 at the
-planning year: 2025 costs for 2025, 2030 costs for 2030, and the same for the
-later years. BAU demand follows the country sheets. Its supply-side fleet
+clustering and the 6 h time step. Every planning year uses technology-data
+v0.16.0 for 2025, so investment costs, fuel prices and efficiencies do not
+change between 2025 and 2050. BAU demand follows the country sheets. Its supply-side fleet
 cannot grow, and that fleet's annual generation is not capped. Mitigation
 runs keep the PyPSA-Eur demand
 for that planning year, may invest, and add the CO2 cap.
 
 ## Figures
 
-After each scenario finishes, and again at the end of the year,
-`python -m macc.postprocessing` writes the study figures in
-`macc/postprocessing/figures/`. Years that are not solved yet stay as empty
-panels.
+After each scenario finishes, `python -m macc.postprocessing` rewrites the
+study figures in `macc/postprocessing/figures/`. A year appears once its BAU
+is solved. The EU reference sheet is the first bar. Each finished mitigation
+scenario adds a bar to that year's figure. A scenario whose annual cost is
+more than five times that year's BAU is left out. The numbers are in
+`macc/postprocessing/tables/scenario_comparison.csv`.
 
-- Figure 1, `figure1_system_macc.png`: six panels, one system MACC per year,
-  with negative and positive abatement costs.
-- Figure 2, `figure2_technology_capacity.png` and
-  `figure2_technology_generation.png`: installed capacity and annual
-  generation across the abatement levels.
-- Figure 3, `figure3_system_cost.png`: annualised investment, fixed operation,
-  variable operation, fuel and any residual.
-- Figure 4, `figure4_shadow_vs_macc.png`: the same six MACC panels with the
-  CO2 shadow price of `CO2Limit-upper` at the middle of each step. The stored
-  dual is negative; the plotted price is its opposite, in EUR/t.
-- Figure 5, `figure5_bau_eu_{year}.png`: after each BAU solve, capacity,
-  electricity generation and energy CO2 against the `EU_B` sheet. Reference
-  emissions are domestic energy-related CO2 plus international bunker CO2.
-  Model emissions are the CO2 added to the atmosphere. The numbers are in
-  `macc/postprocessing/tables/bau_vs_reference.csv`.
-- Figure 6, `figure6_bau_sectors_{year}.png`: final energy consumption by
-  sector. Industry, transport, international aviation and international
-  maritime are the matching sheet rows. Residential and tertiary, including
-  agriculture, are one total, because BAU scales those loads together. The
-  reference is the `EU_A` sector block plus the bunker rows on `EU_B`. The
-  model is the energy the solved loads take, excluding load shedding. The
-  same rows are in `bau_vs_reference.csv`.
-
-Fixed operation is the technology-data FOM share of annualised capital.
-Fuel is the operating cost of the primary fuel generators. Variable
-operation is the remaining operating cost.
+- Figure 1, `figure1_supply_{year}.png`: capacity, electricity generation and
+  CO2. The reference bars are the EU sheet. Model CO2 is what the solved
+  network adds to the atmosphere.
+- Figure 2, `figure2_consumption_{year}.png`: final energy for industry,
+  residential and tertiary, transport, international aviation and
+  international maritime. Maritime includes every shipping fuel.
+- Figure 9, `figure9_bau_reference_{year}.png`: the same capacity,
+  electricity generation, CO2 and final energy as Figures 1 and 2, drawn
+  only for the EU reference and BAU.
+- Figure 3, `figure3_macc_shadow_{year}.png`: the marginal abatement cost of
+  each mitigation strategy and the CO2 shadow price of `CO2Limit-upper`. The
+  stored dual is negative; the plotted price is its opposite, in EUR/t.
+- Figure 4, `figure4_technology_{year}.png`: installed capacity, electricity
+  generation, fossil fuel use, electrolyser capacity, storage capacity,
+  annual investment, and fuel plus operating cost, against the CO2 reduction
+  from BAU.
+- Figure 5, `figure5_macc_emissions_{year}.png`: change in annual investment
+  of each technology relative to BAU. Extra investment is drawn above the
+  axis and lower investment below it.
+- Figure 6, `figure6_system_cost_{year}.png`: total annual system cost of
+  BAU and each mitigation strategy.
+- Figure 7, `figure7_technology_macc_{year}.png`: emissions and investment
+  along the marginal abatement cost. The x-axis is the MACC of each step
+  from one scenario to the next, `(C_i - C_{i-1}) / (E_{i-1} - E_i)`. The
+  left axis is total CO2 emissions. The coloured bands are the technologies
+  that deliver the reduction from that year's BAU, so the bottom of the
+  bands is the scenario's emissions. The right axis is the change in annual
+  investment compared with BAU. A planning year is drawn once its BAU and
+  mitigation scenarios are solved.
+- Figure 8, `figure8_operating_macc_{year}.png`: the same emissions chart.
+  The right axis is the change in annual operating cost, fuel plus variable
+  operation, compared with BAU. A lower operating bill is below zero.

@@ -50,42 +50,42 @@
 2030-MACC_1:
   co2_budget:
     relative: false
-    upper: null
+    upper: 2.037579271
     lower: null
   macc:
     bau: false
 2030-MACC_2:
   co2_budget:
     relative: false
-    upper: null
+    upper: 1.811181575
     lower: null
   macc:
     bau: false
 2030-MACC_3:
   co2_budget:
     relative: false
-    upper: null
+    upper: 1.358386181
     lower: null
   macc:
     bau: false
 2030-MACC_4:
   co2_budget:
     relative: false
-    upper: null
+    upper: 0.905590787
     lower: null
   macc:
     bau: false
 2030-MACC_5:
   co2_budget:
     relative: false
-    upper: null
+    upper: 0.452795394
     lower: null
   macc:
     bau: false
 2030-MACC_6:
   co2_budget:
     relative: false
-    upper: null
+    upper: 0.0
     lower: null
   macc:
     bau: false

@@ -99,3 +99,13 @@ doc/img/intro-workflow.svg
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# generated figures
+*.png
+
+# macc run logs and result tables
+macc/**/*.log
+macc/**/*.csv
+!macc/data/*.csv
+!macc/pathways/*.csv
+!macc/scenario_matrix.csv

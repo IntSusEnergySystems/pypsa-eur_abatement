@@ -6,9 +6,9 @@
 
 PyPSA-Eur builds collection targets from the top-level ``planning_horizons``,
 and a scenario is not allowed to change that list. Each year is therefore its
-own workflow. Costs, demand and the sector pathway follow that planning year.
-Inside a year, weather, fuel prices, technology costs, efficiencies and
-resolution are shared. BAU demand, generation and fuel supply follow the
+own workflow. Demand and the sector pathway follow that planning year.
+Weather, fuel prices, technology costs and efficiencies are taken from the
+2025 cost file in every year. Resolution is shared inside a year. BAU demand, generation and fuel supply follow the
 country sheets. The mitigation runs keep the PyPSA-Eur demand pathway.
 
 BAU has no extra CO2 cap. Its power capacities are fixed to the EU Reference
@@ -57,7 +57,7 @@ from macc.export_pathways import export_pathways  # noqa: E402
 CONFIG_TEMPLATE = """\
 # Overnight MACC for planning year {year}.
 # Demand and the sector pathway come from config/config.default.yaml.
-# Technology costs are this planning year's costs. Weather stays {weather_year}.
+# Technology costs and efficiencies come from the 2025 cost file. Weather stays {weather_year}.
 # BAU is solved first. Its emissions set the CO2 caps of MACC_1..MACC_6.
 #   pixi run macc-year year={year}
 foresight: overnight
@@ -75,7 +75,7 @@ co2_budget:
   upper: null
   lower: null
 costs:
-  year: {year}
+  year: 2025
   emission_prices:
     enable: false
     co2: 0.0

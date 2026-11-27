@@ -1502,6 +1502,10 @@ if __name__ == "__main__":
         rolling_horizon=cf_solving["rolling_horizon"],
     )
 
+    from macc.transmission import apply_existing_transmission
+
+    apply_existing_transmission(n)
+
     if snakemake.config.get("macc", {}).get("bau"):
         from macc.bau_capacities import apply_bau_capacities
         from macc.bau_pathway import apply_bau_pathway

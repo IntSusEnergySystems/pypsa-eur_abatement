@@ -1,6 +1,6 @@
 # Overnight MACC for planning year 2050.
 # Demand and the sector pathway come from config/config.default.yaml.
-# Technology costs are this planning year's costs. Weather stays 2013.
+# Technology costs and efficiencies come from the 2025 cost file. Weather stays 2013.
 # BAU is solved first. Its emissions set the CO2 caps of MACC_1..MACC_6.
 #   pixi run macc-year year=2050
 foresight: overnight
@@ -41,7 +41,7 @@ co2_budget:
   upper: null
   lower: null
 costs:
-  year: 2050
+  year: 2025
   emission_prices:
     enable: false
     co2: 0.0

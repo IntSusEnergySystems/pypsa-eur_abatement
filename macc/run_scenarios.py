@@ -9,7 +9,10 @@ For each planning year the order is:
 1. ``pixi run snakemake`` for ``{year}-BAU``, including PyPSA post-processing.
 2. Read that BAU and write the absolute CO2 caps.
 3. ``pixi run snakemake`` for ``{year}-MACC_1`` through ``{year}-MACC_6``.
-4. After every scenario, write the study figures in ``macc/postprocessing``.
+4. After every scenario, refresh the study figures in ``macc/postprocessing``.
+   The EU reference and BAU are drawn as soon as that year's BAU exists.
+   Each finished mitigation scenario adds a bar. A run costing more than
+   five times BAU is left out.
 5. ``pixi run snakemake macc_postprocess``, which waits for every PyPSA
    post-processing output of the year and writes the tables again.
 """
@@ -70,8 +73,10 @@ def _snakemake(cores: str, config_files: list[Path], target: str | None) -> None
     if config_files:
         cmd.append("--configfile")
         cmd.extend(str(path) for path in config_files)
+    # --configfile consumes every following token, so the rule name has to
+    # come after -- or Snakemake tries to open it as another config file.
     if target:
-        cmd.append(target)
+        cmd.extend(["--", target])
     _run(cmd)
 
 

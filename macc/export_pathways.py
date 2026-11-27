@@ -107,7 +107,7 @@ def _scalar_rows(config: dict) -> pd.DataFrame:
     sector = config["sector"]
     industry = config["industry"]
     fixed = {
-        "costs.year": "planning year",
+        "costs.year": 2025,
         "costs.social_discountrate": config["costs"]["social_discountrate"],
         "costs.fill_values.discount rate": config["costs"]["fill_values"][
             "discount rate"
